@@ -1,0 +1,42 @@
+# ------------------------------------------------------------------
+# Xcode + Swift build artefacts
+# ------------------------------------------------------------------
+.DS_Store
+build/
+DerivedData/
+*.xcarchive
+*.swiftpm/
+*.moved-aside
+
+# User-specific Xcode state (schemes, breakpoints, window layout)
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager resolved state (re-generated on fetch)
+Package.resolved
+
+# ------------------------------------------------------------------
+# Release artefacts
+# ------------------------------------------------------------------
+*.pkg
+*.dmg
+*.zip
+*.ipa
+*.app
+
+# Build pipeline logs
+Scripts/*.log
+
+# ------------------------------------------------------------------
+# Local notes / env
+# ------------------------------------------------------------------
+.env
+.env.local
+*.local.plist
+
+# macOS
+.Spotlight-V100
+.Trashes
+Icon?

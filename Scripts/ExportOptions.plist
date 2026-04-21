@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        HarvestPlus distribution export options for `xcodebuild -exportArchive`.
+
+        method = developer-id        Notarisable, runs outside the App Store.
+        signingStyle = automatic     Xcode picks the matching Developer ID cert
+                                     from the keychain using teamID below.
+        teamID                       Must match the DEVELOPMENT_TEAM in the
+                                     project's build settings.
+        uploadSymbols = false        We don't submit to App Store Connect.
+    -->
+
+    <key>method</key>
+    <string>developer-id</string>
+
+    <key>teamID</key>
+    <string>PA8H58YHD6</string>
+
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <key>destination</key>
+    <string>export</string>
+
+    <key>uploadSymbols</key>
+    <false/>
+
+    <key>stripSwiftSymbols</key>
+    <true/>
+</dict>
+</plist>
