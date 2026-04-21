@@ -15,15 +15,16 @@
 //    3. If newer, download the `.pkg` asset to ~/Downloads
 //    4. Reveal it in Finder so the user double-clicks to install
 //
-//  The .pkg itself is signed with Developer ID and its postinstall script
-//  strips the quarantine flag, so the install is frictionless.
+//  The .pkg is ad-hoc signed (no Apple Developer Program) — users right-click
+//  → Open the downloaded installer once; the postinstall script then strips
+//  the quarantine flag so subsequent app launches are prompt-free.
 //
-//  The GitHub HTTPS URL is the trust anchor — combined with the
-//  Developer-ID signature on the .pkg, integrity end-to-end.
+//  The GitHub HTTPS URL is the trust anchor for the download itself.
 //
 
 import Foundation
 import AppKit
+import Combine
 
 // MARK: - Public surface
 
