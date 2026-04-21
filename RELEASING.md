@@ -1,27 +1,25 @@
 # Releasing HarvestPlus
 
 End-to-end procedure for shipping a new version of HarvestPlus to coworkers.
-The output is **one file**: a signed, notarised `.pkg` uploaded to GitHub
+The output is **one file**: an ad-hoc-signed `.pkg` uploaded to GitHub
 Releases. The installed app auto-detects future releases and self-updates.
+
+This flow deliberately avoids the Apple Developer Program ($99/year) — the
+trade-off is that the `.pkg` is not notarised, so on first install each
+coworker does a one-time **right-click → Open** on the installer. After that
+the installed app launches without any prompts, because the postinstall
+script strips the `com.apple.quarantine` attribute.
 
 ---
 
 ## TL;DR
 
 ```bash
-# 1. Bump version in Xcode (MARKETING_VERSION), commit.
+# 1. Bump version in Xcode (MARKETING_VERSION), update CHANGELOG.md, commit.
 # 2. Build the installer
 ./Scripts/build.sh --clean
 
-# 3. Notarise + staple
-xcrun notarytool submit build/HarvestPlus-<version>.pkg \
-    --apple-id  <your@appleid> \
-    --team-id   PA8H58YHD6 \
-    --password  <app-specific-password> \
-    --wait
-xcrun stapler staple build/HarvestPlus-<version>.pkg
-
-# 4. Tag + publish
+# 3. Tag + publish
 git tag v<version> && git push origin v<version>
 gh release create v<version> build/HarvestPlus-<version>.pkg \
     --title "HarvestPlus <version>" \
@@ -32,41 +30,33 @@ gh release create v<version> build/HarvestPlus-<version>.pkg \
 
 ## Prerequisites (one-time)
 
-1. **Xcode** with your Apple Developer account signed in
-   (Xcode → Settings → Accounts → `+ Add Apple ID…`).
-2. Two certificates in the login keychain:
-   - **Developer ID Application** — signs the `.app` binary.
-   - **Developer ID Installer** — signs the `.pkg`.
-
-   Generate them in Xcode → Settings → Accounts → Manage Certificates if you
-   don't have them. The build script auto-detects the installer certificate;
-   you can override with `INSTALLER_IDENTITY=…` if you have multiples.
-3. **App-specific password** for `notarytool`. Create one at
-   <https://appleid.apple.com> → Sign-in & Security → App-Specific Passwords.
-   Store it in the keychain once:
+1. **Xcode** with any valid Apple ID signed in
+   (Xcode → Settings → Accounts → `+ Add Apple ID…`). A free Apple ID is
+   fine — we don't use the paid Developer Program.
+2. **`xcode-select`** must point at the full Xcode app, not the command-line
+   tools:
    ```bash
-   xcrun notarytool store-credentials "HarvestPlus-Notary" \
-       --apple-id  <your@appleid> \
-       --team-id   PA8H58YHD6 \
-       --password  <app-specific-password>
+   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+   xcodebuild -version   # → "Xcode <major>.<minor>"
    ```
-   After this you can use `--keychain-profile "HarvestPlus-Notary"` instead of
-   passing the Apple ID / password every time.
-4. **GitHub CLI** (`gh auth login`) — used by the release command.
+3. **GitHub CLI** (`gh auth login`) — used by the release command.
+
+That's it. No certificates, no notarytool credentials, no keychain setup.
 
 ---
 
 ## Step 1 — Bump the version
 
-Open the project in Xcode → select the `HarvestPlus` target → **General** tab →
-update **Version** (the "marketing version", e.g. `1.1.0`) and **Build** (a
+Open the project in Xcode → select the `HarvestPlus` target → **General** tab
+→ update **Version** (the "marketing version", e.g. `1.1.0`) and **Build** (a
 monotonic integer). Follow [semver](https://semver.org): bump major for
 breaking changes, minor for new features, patch for bug fixes.
 
-Commit: `git commit -am "Bump version to 1.1.0"`.
+Update `CHANGELOG.md` with a human-readable summary. Move `[Unreleased]`
+content into a new dated `## [1.1.0] — 2026-04-22` section. These notes
+appear on the GitHub release page and inside the in-app update prompt.
 
-Update `CHANGELOG.md` with a human-readable summary. These notes appear in the
-in-app update prompt and on the GitHub release page.
+Commit: `git commit -am "Bump version to 1.1.0"`.
 
 ---
 
@@ -78,45 +68,22 @@ in-app update prompt and on the GitHub release page.
 
 Pipeline:
 
-1. `xcodebuild archive` → `build/HarvestPlus.xcarchive`
-2. `xcodebuild -exportArchive` with `Scripts/ExportOptions.plist`
-   → `build/Export/HarvestPlus.app` (Developer ID signed, hardened runtime)
+1. `xcodebuild archive` with `CODE_SIGN_IDENTITY=-` (ad-hoc)
+   → `build/HarvestPlus.xcarchive`
+2. Pulls `.app` directly from the archive's `Products/Applications/` —
+   no `xcodebuild -exportArchive` step (that one needs a Developer ID).
 3. Stages the app in `build/pkgroot/Applications/` with `postinstall.sh`
-   that strips `com.apple.quarantine` on install
-4. `pkgbuild` → `build/HarvestPlus-<version>.pkg`
-   (auto-signed with your Developer ID Installer cert)
+   that strips `com.apple.quarantine` on install.
+4. `pkgbuild` → `build/HarvestPlus-<version>.pkg` (unsigned).
 
 Output summary is printed at the end of the run.
 
-If the script warns about "No Developer ID Installer identity found", import
-your installer certificate into the login keychain and re-run.
+The script does `codesign --verify --deep --strict` on the built `.app` as
+a sanity check — ad-hoc signatures pass that just fine.
 
 ---
 
-## Step 3 — Notarise
-
-Apple needs to bless the `.pkg` before Gatekeeper will trust it without a
-right-click-Open dance.
-
-```bash
-xcrun notarytool submit build/HarvestPlus-<version>.pkg \
-    --keychain-profile "HarvestPlus-Notary" \
-    --wait
-```
-
-Typical turnaround: 2–10 minutes. On success, staple the ticket to the .pkg so
-offline machines don't need to phone home:
-
-```bash
-xcrun stapler staple build/HarvestPlus-<version>.pkg
-```
-
-Verify with `spctl --assess --type install -vv build/HarvestPlus-<version>.pkg`.
-You want `accepted` and `source=Notarized Developer ID`.
-
----
-
-## Step 4 — Tag and publish on GitHub
+## Step 3 — Tag and publish on GitHub
 
 Git tags are the source of truth for the in-app updater — the tag name must
 match the marketing version (optionally prefixed with `v`).
@@ -136,19 +103,22 @@ gh release create v<version> build/HarvestPlus-<version>.pkg \
 - The tag and the `MARKETING_VERSION` in the app must agree, or users will
   either miss the update (their version > tag) or get flagged as outdated
   after a fresh install.
-- If you publish a draft/prerelease, the updater skips it — only `/releases/latest`
-  is consulted.
+- If you publish a draft/prerelease, the updater skips it — only
+  `/releases/latest` is consulted.
 
 ---
 
-## Step 5 — Verify the update appears
+## Step 4 — Verify the update appears
 
 On a second Mac that already has the previous HarvestPlus version installed:
 
-1. Menu-bar → Settings → **General** → **About** → **Check for Updates**
+1. Menu-bar → Settings → **General** → **About** → **Check for Updates**.
 2. You should see "Version `<new>` is available" with the release notes.
-3. "Download & Install" saves the .pkg to `~/Downloads` and reveals it in Finder.
-4. Double-click → authenticate → done.
+3. "Download & Install" saves the `.pkg` to `~/Downloads` and reveals it in
+   Finder.
+4. Right-click → **Open** → authenticate → done. (The right-click is only
+   needed because the `.pkg` is unsigned; the installed app itself launches
+   silently on subsequent runs.)
 
 Automatic checks run **once per 24h** on launch. The interval is
 `UpdateChecker.autoCheckInterval` if you need to tune it.
@@ -169,11 +139,11 @@ Automatic checks run **once per 24h** on launch. The interval is
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `xcodebuild archive failed` with signing error | Wrong team in keychain | `DEVELOPMENT_TEAM` in `ExportOptions.plist` and Xcode Accounts must match |
-| `xcodebuild -exportArchive` fails with "no matching provisioning profile" | Developer ID Application cert missing | Generate via Xcode → Settings → Accounts → Manage Certificates |
-| `pkgbuild` says "No Developer ID Installer found" | Cert not in keychain | Same as above, pick "Developer ID Installer" |
-| Notarisation rejected, `hardened-runtime` error | Build config wrong | Confirm `ENABLE_HARDENED_RUNTIME = YES` in Release |
-| App still shows the "downloaded from the internet" prompt after install | `postinstall.sh` didn't run | Inspect `/var/log/install.log` for script errors — usually a missing execute bit on the script; `./Scripts/build.sh --clean` always re-chmods |
+| `xcodebuild: error: tool 'xcodebuild' requires Xcode` | `xcode-select` pointed at CLI tools | `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` |
+| `xcodebuild archive` fails with a signing error | Xcode trying to auto-sign against a team you don't have | The script passes `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-` — check you haven't re-enabled "Automatically manage signing" in Xcode and saved a team into the project |
+| `pkgbuild` fails with "postinstall not executable" | Script bit was stripped | `chmod +x Scripts/postinstall.sh` and rerun |
+| Coworker says "the `.pkg` is damaged and can't be opened" | Gatekeeper blocking unsigned installer | Tell them to **right-click → Open** instead of double-click. One-time only. |
+| App launches but immediately quits on a coworker's Mac | Architecture mismatch (e.g. Intel Mac, binary is Apple Silicon only) | Rebuild with `-arch x86_64 -arch arm64` or set `ONLY_ACTIVE_ARCH=NO` in Xcode Release config |
 | Updater says "not configured" | `UpdateChecker.repository` still set to placeholder | Edit `HarvestPlus/Updates/UpdateChecker.swift`, replace `YOUR_GITHUB_USER/HarvestPlus` with your real `owner/repo` |
 
 ---
@@ -182,9 +152,9 @@ Automatic checks run **once per 24h** on launch. The interval is
 
 ```
 Scripts/
-  build.sh             Archive + export + pkgbuild pipeline
+  build.sh             Archive + pkgbuild pipeline (ad-hoc signing)
   postinstall.sh       Runs as root on install → strips quarantine
-  ExportOptions.plist  Developer ID export config for xcodebuild
+  ExportOptions.plist  (unused — kept for future Developer ID path)
 
 HarvestPlus/Updates/
   UpdateChecker.swift  Polls GitHub Releases, downloads new .pkg
@@ -192,6 +162,21 @@ HarvestPlus/Updates/
 
 build/                 (git-ignored) build output
   HarvestPlus.xcarchive
-  Export/HarvestPlus.app
   HarvestPlus-<version>.pkg   ← ship this
 ```
+
+---
+
+## Upgrading to the signed/notarised path later
+
+If you ever do join the Apple Developer Program, the path forward is:
+
+1. Set `INSTALLER_IDENTITY` to your Developer ID Installer cert name.
+2. Re-add the `xcodebuild -exportArchive` step using
+   `Scripts/ExportOptions.plist` (kept in the repo for this reason).
+3. Add a notarytool step after pkgbuild.
+4. Drop the `xattr -cr` from `postinstall.sh` — notarised packages don't
+   need it (Gatekeeper trusts them directly).
+
+No Swift code changes required; the updater and the in-app experience stay
+identical.
