@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] — 2026-04-22
+
+### Fixed
+
+- Settings → Integrations no longer asks for the keychain password every
+  time the tab is opened. `loadCredentials()` was calling `SecItemCopyMatching`
+  on both keychain items on every `.onAppear`, triggering an ACL check each
+  visit. Fix: `AppState` already reads the token from the keychain exactly once
+  at launch — it now keeps it in a `harvestToken` property in memory.
+  `IntegrationsSettingsTab` reads that in-memory value instead of going back to
+  the keychain. Zero keychain calls on subsequent visits to the tab.
+
 ## [1.0.7] — 2026-04-22
 
 ### Fixed

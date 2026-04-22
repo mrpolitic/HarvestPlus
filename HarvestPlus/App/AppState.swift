@@ -156,6 +156,11 @@ final class AppState: ObservableObject {
     @Published var isConnected: Bool = false
 
     private(set) var harvestClient: HarvestAPIClient?
+    /// Token kept in memory so the Settings UI can read it without a second
+    /// keychain call on every view appear. Populated once at launch, updated
+    /// whenever new credentials are saved. Never written anywhere except the
+    /// login Keychain.
+    private(set) var harvestToken: String = ""
     private(set) var timerMonitor: TimerMonitor?
     private(set) var bannerManager: BannerManager?
     private(set) var idleDetector: IdleDetector?
@@ -195,6 +200,7 @@ final class AppState: ObservableObject {
             try? KeychainHelper.save(key: KeychainKey.harvestAccountId, string: accountId)
             try? KeychainHelper.save(key: KeychainKey.harvestToken, string: token)
             harvestClient = HarvestAPIClient(accountId: accountId, token: token)
+            harvestToken = token
             settings.harvestAccountId = accountId
             isConnected = true
             Task {
@@ -216,6 +222,7 @@ final class AppState: ObservableObject {
 
     func initializeHarvestClient(accountId: String, token: String) {
         harvestClient = HarvestAPIClient(accountId: accountId, token: token)
+        harvestToken = token
         isConnected = true
         Task {
             await fetchInitialData()

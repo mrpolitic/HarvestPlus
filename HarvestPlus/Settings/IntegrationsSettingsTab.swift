@@ -296,8 +296,12 @@ struct IntegrationsSettingsTab: View {
     // MARK: - Actions
 
     private func loadCredentials() {
-        accountId = (try? KeychainHelper.loadString(key: KeychainKey.harvestAccountId)) ?? ""
-        apiToken = (try? KeychainHelper.loadString(key: KeychainKey.harvestToken)) ?? ""
+        // Read from the in-memory cache on AppState — avoids a keychain ACL
+        // check (and the password prompt it can trigger) on every tab appear.
+        // AppState loads from the keychain exactly once at launch and keeps
+        // the values in memory for the lifetime of the app.
+        accountId = appState.settings.harvestAccountId
+        apiToken  = appState.harvestToken
     }
 
     private func saveCredentials() {
