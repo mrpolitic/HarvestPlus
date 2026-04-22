@@ -3,17 +3,30 @@
 # install.sh — one-shot HarvestPlus installer.
 #
 # Usage (copy-paste into Terminal):
-#   curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
+#
+#   Per-user install (default, no admin password needed):
+#     curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
+#
+#   System-wide install (/Applications, requires admin password):
+#     curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash -s -- --system
 #
 # What it does:
 #   1. Downloads the latest HarvestPlus.app.zip from GitHub Releases.
-#   2. Extracts it into /Applications (replacing any existing install).
+#   2. Extracts it into ~/Applications (or /Applications with --system).
 #   3. Strips the com.apple.quarantine xattr so macOS won't prompt on launch.
 #   4. Launches the app.
 #
+# Why ~/Applications by default?
+# ------------------------------
+# macOS treats ~/Applications as a first-class app location — Launchpad,
+# Spotlight, auto-start at login, Dock-pinning, and launch services all
+# pick it up identically to /Applications. The only practical difference
+# is that installs there need *no* admin password, which matters a lot
+# for a utility that ships a new release every few weeks.
+#
 # Why curl instead of a .pkg double-click?
-# ---------------------------------------
-# HarvestPlus is not Apple-notarised (we skip the $99/year Apple Developer
+# ----------------------------------------
+# HarvestPlus isn't Apple-notarised (we skip the $99/year Apple Developer
 # Program). On macOS 14+ a downloaded .pkg or .app shows Gatekeeper's
 # "Apple could not verify ..." wall, and since macOS 15 (Sequoia) the
 # right-click → Open escape hatch is gone — users have to visit
@@ -29,8 +42,36 @@ set -euo pipefail
 OWNER="mrpolitic"
 REPO="HarvestPlus"
 APP_NAME="HarvestPlus"
-APPS_DIR="/Applications"
+
+# ---------------------------------------------------------------------------
+# Flag parsing
+# ---------------------------------------------------------------------------
+
+SYSTEM_INSTALL=0
+for arg in "$@"; do
+    case "$arg" in
+        --system)     SYSTEM_INSTALL=1 ;;
+        --user)       SYSTEM_INSTALL=0 ;;      # explicit opposite, for clarity
+        -h|--help)
+            sed -n '2,20p' "$0" 2>/dev/null || true
+            exit 0
+            ;;
+        *)
+            printf "Unknown argument: %s\n" "$arg" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [ $SYSTEM_INSTALL -eq 1 ]; then
+    APPS_DIR="/Applications"
+    OTHER_DIR="$HOME/Applications"
+else
+    APPS_DIR="$HOME/Applications"
+    OTHER_DIR="/Applications"
+fi
 INSTALL_PATH="$APPS_DIR/${APP_NAME}.app"
+OTHER_PATH="$OTHER_DIR/${APP_NAME}.app"
 
 # /releases/latest/download/<asset> 302s to the actual asset on the latest
 # non-prerelease release — avoids hitting the JSON API's rate limit.
@@ -42,6 +83,7 @@ ASSET_URL="https://github.com/${OWNER}/${REPO}/releases/latest/download/${APP_NA
 
 blue()  { printf "\033[1;34m==>\033[0m %s\n" "$*"; }
 green() { printf "\033[1;32m✓\033[0m %s\n"  "$*"; }
+yell()  { printf "\033[1;33m!\033[0m %s\n"  "$*" >&2; }
 red()   { printf "\033[1;31m✗\033[0m %s\n"  "$*" >&2; }
 
 # ---------------------------------------------------------------------------
@@ -53,9 +95,28 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
+# Make sure ~/Applications exists when we're using it (it's not created by default on a fresh Mac).
+if [ $SYSTEM_INSTALL -eq 0 ] && [ ! -d "$APPS_DIR" ]; then
+    mkdir -p "$APPS_DIR"
+fi
+
+# Decide whether we need sudo. For user installs, we never should. For
+# --system, we sudo every privileged step if /Applications isn't already
+# writable by the current user.
+SUDO=""
 if [ ! -w "$APPS_DIR" ]; then
-    red "Can't write to ${APPS_DIR}. Re-run with: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/${OWNER}/${REPO}/main/Scripts/install.sh)\""
-    exit 1
+    if [ $SYSTEM_INSTALL -eq 1 ]; then
+        if command -v sudo >/dev/null 2>&1; then
+            SUDO="sudo"
+            blue "Installing to ${APPS_DIR} — you'll be prompted once for your admin password."
+        else
+            red "Can't write to ${APPS_DIR} and sudo isn't available."
+            exit 1
+        fi
+    else
+        red "Can't write to ${APPS_DIR}. Check its permissions, or re-run with --system."
+        exit 1
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -97,21 +158,20 @@ fi
 OLD_STASH=""
 if [ -d "$INSTALL_PATH" ]; then
     OLD_STASH="$TMP_DIR/previous-${APP_NAME}.app"
-    mv "$INSTALL_PATH" "$OLD_STASH"
+    $SUDO mv "$INSTALL_PATH" "$OLD_STASH"
 fi
 
 blue "Extracting into ${APPS_DIR}…"
 # ditto preserves HFS metadata, symlinks, and perms inside the .app bundle.
-if ! /usr/bin/ditto -x -k "$ZIP_PATH" "$APPS_DIR"; then
+if ! $SUDO /usr/bin/ditto -x -k "$ZIP_PATH" "$APPS_DIR"; then
     red "Extraction failed."
-    # Roll back if we had a working install before.
-    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && mv "$OLD_STASH" "$INSTALL_PATH"
+    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && $SUDO mv "$OLD_STASH" "$INSTALL_PATH"
     exit 1
 fi
 
 if [ ! -d "$INSTALL_PATH" ]; then
     red "Extraction produced no ${APP_NAME}.app at ${INSTALL_PATH}."
-    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && mv "$OLD_STASH" "$INSTALL_PATH"
+    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && $SUDO mv "$OLD_STASH" "$INSTALL_PATH"
     exit 1
 fi
 
@@ -120,10 +180,26 @@ fi
 # ---------------------------------------------------------------------------
 
 blue "Stripping quarantine attribute…"
-/usr/bin/xattr -dr com.apple.quarantine "$INSTALL_PATH" 2>/dev/null || true
+$SUDO /usr/bin/xattr -dr com.apple.quarantine "$INSTALL_PATH" 2>/dev/null || true
 
 blue "Launching ${APP_NAME}…"
 /usr/bin/open "$INSTALL_PATH"
 
 green "HarvestPlus is installed at ${INSTALL_PATH}."
-green "Look in your menu bar — there's a new icon. ⌘-click it to reveal the popover."
+green "Look in your menu bar — there's a new icon."
+
+# ---------------------------------------------------------------------------
+# Warn about a stale copy in the other location
+# ---------------------------------------------------------------------------
+
+if [ -d "$OTHER_PATH" ]; then
+    yell ""
+    yell "Heads up — an old HarvestPlus.app still lives at:"
+    yell "   ${OTHER_PATH}"
+    yell "Launchpad/Spotlight will see both copies. To remove the old one:"
+    if [ $SYSTEM_INSTALL -eq 1 ]; then
+        yell "   rm -rf \"${OTHER_PATH}\""
+    else
+        yell "   sudo rm -rf \"${OTHER_PATH}\""
+    fi
+fi

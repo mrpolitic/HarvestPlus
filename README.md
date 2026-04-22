@@ -64,11 +64,24 @@ Open **Terminal** (`⌘-Space`, type "Terminal", enter), paste this, hit Return:
 curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
 ```
 
-That's it. The script:
+No admin password needed — this installs to `~/Applications` (your user's
+private Applications folder). macOS treats `~/Applications` identically to
+`/Applications` for Launchpad, Spotlight, Dock-pinning, and launch-at-login,
+so the app works the same either way.
+
+If you'd rather install to the system-wide `/Applications` (visible to other
+users on the same Mac), append `--system` — you'll be asked for your admin
+password once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash -s -- --system
+```
+
+Either way the script:
 
 1. Downloads `HarvestPlus.app.zip` from the latest GitHub release.
-2. Extracts it into `/Applications/HarvestPlus.app` (replacing any previous
-   version).
+2. Extracts it into `~/Applications/HarvestPlus.app` (or `/Applications` with
+   `--system`), replacing any previous version.
 3. Strips the `com.apple.quarantine` flag so macOS launches it without any
    "Apple cannot verify…" Gatekeeper prompt.
 4. Launches the app. A small icon appears in your menu bar.

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-04-22
+
+### Changed
+
+- Installer now defaults to `~/Applications` instead of `/Applications`, so
+  no admin password is ever requested. macOS treats `~/Applications` as a
+  first-class app location — Launchpad/Spotlight/launch-at-login all still
+  work. Pass `--system` to the install command for the old `/Applications`
+  behaviour (still prompts for admin once).
+- `install.sh` now detects a leftover copy in the other location after
+  install and prints a one-line removal hint, so users who migrate don't
+  end up with two HarvestPlus icons in Launchpad.
+
 ## [1.0.1] — 2026-04-22
 
 ### Changed
