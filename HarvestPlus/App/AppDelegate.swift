@@ -15,6 +15,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - App Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // One-time migration: re-save keychain items with the "allow all" ACL
+        // introduced in 1.0.3 so ad-hoc re-signs no longer trigger prompts.
+        // This is a no-op after the first run (items already have the new ACL).
+        KeychainHelper.migrateToAllowAllAccess()
+
         // Register for system events
         registerSystemEventObservers()
     }

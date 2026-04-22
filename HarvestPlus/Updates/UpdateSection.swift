@@ -3,12 +3,13 @@
 //  HarvestPlus
 //
 //  Settings row that shows the current version, the last update-check result,
-//  and (when applicable) a one-click "Copy Install Command" button. Embedded
-//  in GeneralSettingsTab under the "About" section.
+//  and (when applicable) a one-click "Install Update" button. Embedded in
+//  GeneralSettingsTab under the "About" section.
 //
-//  We don't download the update in-app — the app is sandboxed and can't
-//  replace its own bundle cleanly. Instead the user pastes a curl | bash
-//  one-liner into Terminal, which handles quit → replace → relaunch.
+//  Clicking "Install Update" opens Terminal and runs `install.sh` directly
+//  (via a .command file in the sandbox tmp dir — see UpdateChecker).
+//  The sandboxed app can't replace its own bundle in place, so we delegate
+//  the quit → download → extract → relaunch dance to bash in Terminal.
 //
 
 import SwiftUI
@@ -16,8 +17,14 @@ import SwiftUI
 struct UpdateSection: View {
     @ObservedObject var checker: UpdateChecker
 
-    /// Briefly flips to `true` after the user clicks "Copy Install Command",
-    /// so the button label can say "Copied ✓" for a couple of seconds.
+    /// Briefly flips to `true` while Terminal is being launched, so the
+    /// button can show "Opening Terminal…" and disable itself to prevent
+    /// double-clicks that would stack Terminal windows.
+    @State private var launching = false
+
+    /// Briefly flips to `true` after a fallback "Copy Command" click. Used
+    /// when `launchInstaller()` can't write the .command script for some
+    /// reason and we gracefully fall back to clipboard.
     @State private var justCopied = false
 
     var body: some View {
@@ -46,6 +53,7 @@ struct UpdateSection: View {
         }
         .animation(.easeInOut(duration: 0.2), value: checker.state)
         .animation(.easeInOut(duration: 0.2), value: checker.lastResult)
+        .animation(.easeInOut(duration: 0.2), value: launching)
         .animation(.easeInOut(duration: 0.2), value: justCopied)
     }
 
@@ -53,7 +61,7 @@ struct UpdateSection: View {
     //
     // Three states:
     //   - idle, no update    → "Check for Updates"
-    //   - idle, update ready → "Copy Install Command" (flips to "Copied ✓" briefly)
+    //   - idle, update ready → "Install Update" (opens Terminal and runs install.sh)
     //   - checking           → progress spinner + "Checking…"
     @ViewBuilder
     private var actionButton: some View {
@@ -67,11 +75,11 @@ struct UpdateSection: View {
             }
         case .idle:
             if case .updateAvailable = checker.lastResult {
-                Button(justCopied ? "Copied ✓" : "Copy Install Command") {
-                    copyInstallCommand()
+                Button(launching ? "Opening Terminal…" : "Install Update") {
+                    installUpdate()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(justCopied)
+                .disabled(launching)
             } else {
                 Button("Check for Updates") {
                     Task { await checker.checkForUpdates() }
@@ -104,22 +112,6 @@ struct UpdateSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Install instructions — the button above copies this; we
-                // show it inline so the user knows what they just copied.
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Paste this into Terminal to install:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(UpdateChecker.installCommand)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-
                 HStack(spacing: 10) {
                     Button("View on GitHub") {
                         checker.openReleasePage(info)
@@ -146,13 +138,24 @@ struct UpdateSection: View {
 
     // MARK: - Actions
 
-    private func copyInstallCommand() {
-        _ = checker.copyInstallCommand()
-        justCopied = true
-        // Revert the label after a short delay so repeated copies still work.
+    private func installUpdate() {
+        launching = true
+        do {
+            try checker.launchInstaller()
+        } catch {
+            // launchInstaller() failed to write the .command file (disk full?).
+            // Fall back to copying the command so the user can still install.
+            _ = checker.copyInstallCommand()
+            justCopied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                justCopied = false
+            }
+        }
+        // Reset the button label after a moment — Terminal is now open.
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            justCopied = false
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            launching = false
         }
     }
 

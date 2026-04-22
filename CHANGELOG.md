@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-04-22
+
+### Changed
+
+- Update button now opens Terminal directly and runs the installer — no more
+  copying and pasting a command. Clicking **Install Update** in Settings →
+  General → About opens a Terminal window that downloads and installs the new
+  version in one step.
+- Keychain items are now saved with an "allow all" access ACL
+  (`SecAccessCreate` with an empty trusted-application list). Previously
+  each new build's ad-hoc code signature was baked into the item's ACL,
+  so macOS prompted for the login keychain password on every update.
+  With this fix the credentials survive binary replacements without any
+  prompt. A one-time migration at first launch re-saves existing items with
+  the new ACL (may prompt once per item for items created by an older build).
+
 ## [1.0.2] — 2026-04-22
 
 ### Changed
