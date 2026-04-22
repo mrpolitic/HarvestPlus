@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-04-22
+
+### Fixed
+
+- Keychain prompts on install reduced from up to 4 (per install) to at most
+  2 (one-time migration only). The 1.0.3 fix read credentials twice on launch
+  — once in `AppState.init()` and again in the AppDelegate migration — so
+  macOS could prompt for each item on both reads. The migration is now inlined
+  into `AppState.init()` as an immediate re-save after the existing read,
+  so there is only ever one read pass. After the migration runs once, future
+  installs prompt zero times.
+
 ## [1.0.3] — 2026-04-22
 
 ### Changed

@@ -184,10 +184,16 @@ final class AppState: ObservableObject {
         // Load persisted settings
         loadPersistedSettings()
 
-        // Try to load saved credentials on launch
+        // Try to load saved credentials on launch.
+        // Immediately re-save each item after reading so the "allow all" ACL
+        // introduced in 1.0.3 is applied in the same pass that reads the value.
+        // This means at most one keychain prompt per item ever — not one per
+        // install — and removes the need for a separate AppDelegate migration.
         if let accountId = try? KeychainHelper.loadString(key: KeychainKey.harvestAccountId),
            let token = try? KeychainHelper.loadString(key: KeychainKey.harvestToken),
            !accountId.isEmpty, !token.isEmpty {
+            try? KeychainHelper.save(key: KeychainKey.harvestAccountId, string: accountId)
+            try? KeychainHelper.save(key: KeychainKey.harvestToken, string: token)
             harvestClient = HarvestAPIClient(accountId: accountId, token: token)
             settings.harvestAccountId = accountId
             isConnected = true
