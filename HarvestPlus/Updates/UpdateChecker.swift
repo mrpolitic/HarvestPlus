@@ -32,6 +32,7 @@
 import Foundation
 import AppKit
 import Combine
+import Darwin   // removexattr — used to strip quarantine from the .command file
 
 // MARK: - Public surface
 
@@ -197,6 +198,14 @@ final class UpdateChecker: ObservableObject {
             [.posixPermissions: NSNumber(value: 0o755)],
             ofItemAtPath: cmdFile.path
         )
+
+        // Strip the quarantine xattr that macOS automatically applies when a
+        // sandboxed app creates an executable file. Without this, Gatekeeper
+        // shows "is damaged and can't be opened" when Terminal tries to open
+        // the script. removexattr on a file we own in our own sandbox container
+        // is permitted by the default sandbox profile.
+        // Return value 0 = success, ENOATTR = attribute wasn't set — both fine.
+        removexattr(cmdFile.path, "com.apple.quarantine", 0)
 
         // Prefer opening the file explicitly with Terminal.app — that way the
         // install still works for users whose default .command handler is

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-04-22
+
+### Fixed
+
+- "Install Update" button now works. The `.command` script written to the
+  sandbox temp dir was getting `com.apple.quarantine` applied automatically
+  by macOS (sandboxed apps that create executable files trigger this).
+  Gatekeeper then blocked Terminal from opening it with "is damaged and
+  can't be opened". Fix: call `removexattr(path, "com.apple.quarantine", 0)`
+  on the file immediately after writing it — permitted on files the app
+  owns in its own sandbox container.
+
 ## [1.0.4] — 2026-04-22
 
 ### Fixed
