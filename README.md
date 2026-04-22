@@ -1,10 +1,9 @@
 # HarvestPlus
 
 A macOS menu-bar companion for [Harvest](https://www.getharvest.com) that
-keeps your time tracking honest without pulling you out of flow. It lives in
-the menu bar, shows the running timer, surfaces your day at a glance, folds in
-your calendar meetings, and lets you stop / switch / review entries without
-ever touching the Harvest web UI.
+turns raw Harvest data into dashboards, PDF reports, and smart reminders —
+without pulling you out of flow. Runs quietly in the menu bar; no Dock icon,
+no subscription, no setup beyond pasting your API token.
 
 HarvestPlus is **not** affiliated with or endorsed by Harvest / Iridesco. It's
 a community-built client that talks to the public [Harvest API
@@ -14,49 +13,28 @@ v2](https://help.getharvest.com/api-v2/).
 
 ## What it does
 
-Open HarvestPlus from the menu bar and you get:
-
-- **Today's running timer** with a live elapsed clock.
-- **Today's time entries** as a scrollable list, grouped by project, with a
-  timeline bar showing how your hours are distributed.
-- **Calendar meetings** from macOS Calendar overlaid on the same timeline —
-  so you can see at a glance which meetings you've already logged and which
-  you haven't.
-- **Dashboards** for today / this week / this month / this year with summary
-  cards (hours logged, target, overtime, break usage).
-- **PDF reports** for any of those ranges, signed off with a clean layout.
-- **Banners** (optional) that nag you when you forget to stop the timer or
-  when a meeting you haven't logged has just finished.
-- **Auto-updates** from GitHub Releases — the app polls daily, shows you
-  the release notes when a new version drops, and hands you a single
-  `curl | bash` command to install it.
-
----
-
-## Features and why they're here
-
-| Feature | Rationale |
-|---|---|
-| **Menu-bar only** (no Dock icon) | Time tracking is ambient — it should sit in the corner, not take up a full app window or a Dock slot. `LSUIElement = YES`. |
-| **Live timer in the menu bar icon** | The icon state (green / red / grey) tells you at a glance whether a timer is running, so you don't have to click in just to check. |
-| **Today's entries in a popover** | The 80% case ("what am I working on, what have I logged, stop the timer") happens without ever opening a window. One click, done. |
-| **Calendar integration** | Meetings are the #1 source of untracked time. HarvestPlus reads your Calendar with `EventKit`, maps events to Harvest projects via your mapping rules, and lets you convert a meeting into a time entry with two clicks. |
-| **Meeting → Project mapper** | Calendars are messy. You decide per-meeting (or via rules on organizer / title keyword) which Harvest project+task a calendar event should log against. |
-| **Daily / Weekly / Monthly / Yearly dashboards** | Harvest's own reports are good but heavyweight. These are fast, keyboard-less, and always current because they're driven off the same cache as the popover. |
-| **Overtime calculator** | If you set per-weekday targets (e.g. 7.5h Mon–Thu, 7.0h Fri), HarvestPlus rolls up overtime/undertime against those targets including a configurable lunch window. It respects public holidays and your manually-defined PTO. |
-| **PDF export** | Because sometimes "send me the timesheet" means "literally send me a PDF". Built-in `PDFKit` output, no third-party dependency. |
-| **Banners** | Two flavours: "timer still running after hours" and "meeting just ended — log it?". Both are optional and can be dismissed/deferred. |
-| **Idle detection** | If you walk away from the Mac for N minutes, HarvestPlus can auto-pause or prompt. Configurable threshold. |
-| **Keychain-backed token** | Your Harvest personal access token is stored in the login Keychain, not in UserDefaults. Never touches the app bundle or iCloud. |
-| **Sandboxed + Hardened Runtime** | The app is sandboxed and uses the hardened runtime — the same security posture Apple requires for notarised apps. The binary is ad-hoc signed (no Apple Developer Program membership required). |
-| **`curl \| bash` installer** | macOS 15 removed the right-click → Open escape hatch for unsigned apps, so a downloaded `.pkg`/`.app` now requires a trip to System Settings → Privacy & Security for every install. Our `Scripts/install.sh` sidesteps Gatekeeper entirely: `curl` doesn't tag files with `com.apple.quarantine`, and we strip any residual xattr before launch. No prompts, no System Settings visit. |
-| **Self-updating** | Internal distribution shouldn't mean manually chasing coworkers down to install a new build. The app polls GitHub Releases daily and, when a new version is available, gives you a one-click button that copies the install command to your clipboard. |
+- **Dashboards** — daily, weekly, monthly, and yearly views with summary cards:
+  hours logged, target, overtime, and break usage. Always current, no page
+  reload.
+- **PDF reports** — export any of those ranges to a clean, ready-to-send PDF
+  in two clicks.
+- **Smart banners** (optional) — get nudged when you forget to stop the timer,
+  or when a calendar meeting has just ended without a logged entry. Dismissible
+  and configurable.
+- **Calendar integration** — your macOS Calendar events appear alongside your
+  time entries so you can see which meetings are logged and which aren't, and
+  convert any event to a Harvest entry in two clicks.
+- **Overtime calculator** — set per-weekday hour targets (e.g. 7.5h Mon–Thu,
+  7.0h Fri), a lunch window, and any public holidays or PTO days. HarvestPlus
+  rolls up your real overtime and undertime against those targets.
+- **Auto-updates** — the app polls GitHub Releases daily. When a new version is
+  available, one click opens Terminal and installs it in place.
+- **Menu-bar popover** — today's entries and running timer are always one click
+  away, without opening a full app window.
 
 ---
 
 ## Installing HarvestPlus
-
-### For coworkers (you just want the app)
 
 Open **Terminal** (`⌘-Space`, type "Terminal", enter), paste this, hit Return:
 
@@ -115,9 +93,9 @@ After first launch:
 
 HarvestPlus checks for new releases automatically once per 24 hours. You can
 also force a check from *Settings → General → About → Check for Updates*.
-When an update is available, click **Copy Install Command** — that copies
-the same `curl | bash` one-liner as above. Paste it into Terminal, hit
-Return, and the running app is replaced with the new version in-place.
+When an update is available, click **Install Update** — Terminal opens and
+runs the same `curl | bash` one-liner automatically. The running app is
+replaced in-place.
 
 ---
 
@@ -236,10 +214,11 @@ constants rather than constructed per-frame.
   per 24h (and manually on demand).
 - Semver compares the tag (or `name`) against `CFBundleShortVersionString`,
   handling prerelease tails (`1.2.0-beta.1 < 1.2.0`).
-- On finding a newer release, copies a `curl | bash` one-liner to the
-  pasteboard (`NSPasteboard.general`) so the user can install from Terminal.
-  We don't download in-app: sandboxed apps can't replace their own bundle,
-  and a `URLSession`-downloaded `.zip` would inherit the quarantine xattr.
+- On finding a newer release, uses `NSAppleScript` to tell Terminal to
+  `do script` with the install one-liner — no file written, no quarantine
+  issue. We don't download in-app: sandboxed apps can't replace their own
+  bundle, and a `URLSession`-downloaded `.zip` would inherit the quarantine
+  xattr.
 
 ### Security & privacy
 
@@ -254,10 +233,12 @@ constants rather than constructed per-frame.
   authenticity out-of-band (you pointed them at this repo). In exchange for
   the "right-click → Open once per install" friction, you skip the $99/year
   Apple Developer Program fee and the 5-10 minute notarise step per release.
-- **Entitlements** (auto-managed by Xcode based on build settings + Info.plist):
-  - `com.apple.security.network.client` — Harvest API calls.
+- **Entitlements** (`HarvestPlus.entitlements`):
+  - `com.apple.security.network.client` — Harvest API + update checks.
   - `com.apple.security.personal-information.calendars` — EventKit.
-  - Keychain access group for storing credentials.
+  - `com.apple.security.files.user-selected.read-write` — PDF export destination.
+  - `com.apple.security.automation.apple-events` — tells Terminal to run the
+    installer when you click *Install Update* (one-time consent dialog).
 - **What leaves your Mac**
   - HTTPS calls to `api.harvestapp.com` (authenticated with your token).
   - HTTPS calls to `api.github.com` and `objects.githubusercontent.com`
