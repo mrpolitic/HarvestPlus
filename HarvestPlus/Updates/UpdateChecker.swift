@@ -6,18 +6,25 @@
 //
 //  Why not Sparkle?
 //  ----------------
-//  HarvestPlus is sandboxed and distributed as a .pkg. Sparkle's self-install
-//  flow requires XPC services and temporary sandbox exceptions, which adds
-//  complexity we don't need for an internal tool. Instead we:
+//  HarvestPlus is sandboxed. Sparkle's self-install flow needs XPC services
+//  and temporary sandbox exceptions — more machinery than we need for an
+//  internal tool.
+//
+//  The update flow:
 //
 //    1. Poll `api.github.com/repos/<owner>/<repo>/releases/latest`
 //    2. Compare the published tag to our CFBundleShortVersionString (semver)
-//    3. If newer, download the `.pkg` asset to ~/Downloads
-//    4. Reveal it in Finder so the user double-clicks to install
+//    3. If newer, show the release notes + a one-click "Copy Install Command"
+//       button. The user pastes that command into Terminal; the installer
+//       script replaces /Applications/HarvestPlus.app in place and relaunches.
 //
-//  The .pkg is ad-hoc signed (no Apple Developer Program) — users right-click
-//  → Open the downloaded installer once; the postinstall script then strips
-//  the quarantine flag so subsequent app launches are prompt-free.
+//  Why not download-and-replace in-app?
+//  ------------------------------------
+//  The app is sandboxed, so it can't overwrite its own bundle in /Applications
+//  without user approval anyway. And the downloaded .zip would inherit the
+//  quarantine xattr if delivered via a browser-style download, triggering
+//  Gatekeeper on relaunch. Running `curl ... | bash` in Terminal sidesteps
+//  both problems: curl doesn't set quarantine, and the shell isn't sandboxed.
 //
 //  The GitHub HTTPS URL is the trust anchor for the download itself.
 //
@@ -42,8 +49,8 @@ struct UpdateInfo: Equatable {
     let releaseName: String       // e.g. "HarvestPlus 1.2.0"
     let releaseNotes: String      // Markdown body from GitHub release
     let publishedAt: Date
-    let downloadURL: URL          // .pkg asset URL
-    let downloadSize: Int64       // bytes
+    let zipURL: URL               // .app.zip asset URL (kept for reference; not auto-downloaded)
+    let zipSize: Int64            // bytes
     let htmlURL: URL              // release landing page on GitHub
 }
 
@@ -62,6 +69,11 @@ final class UpdateChecker: ObservableObject {
     /// concern is polite rate-limiting of the GitHub API.
     static let autoCheckInterval: TimeInterval = 24 * 60 * 60
 
+    /// The Terminal one-liner we tell the user to paste. Defined once here so
+    /// the Settings UI and this file can't drift out of sync.
+    static let installCommand =
+        "curl -fsSL https://raw.githubusercontent.com/\(repository)/main/Scripts/install.sh | bash"
+
     /// UserDefaults key that records the timestamp of the last successful check.
     private static let lastCheckKey = "lastUpdateCheckAt"
 
@@ -69,12 +81,10 @@ final class UpdateChecker: ObservableObject {
 
     @Published private(set) var state: State = .idle
     @Published private(set) var lastResult: UpdateCheckResult?
-    @Published private(set) var downloadProgress: Double = 0
 
     enum State: Equatable {
         case idle
         case checking
-        case downloading
     }
 
     // MARK: - Public API
@@ -107,12 +117,12 @@ final class UpdateChecker: ObservableObject {
             let current = normalized(currentVersion)
 
             if compareSemver(latestVersion, current) == .orderedDescending {
-                guard let asset = release.pkgAsset() else {
-                    lastResult = .failed(message: "Release \(release.tag_name) has no .pkg asset.")
+                guard let asset = release.installerAsset() else {
+                    lastResult = .failed(message: "Release \(release.tag_name) has no .app.zip asset.")
                     return
                 }
                 guard let htmlURL = URL(string: release.html_url),
-                      let downloadURL = URL(string: asset.browser_download_url) else {
+                      let zipURL = URL(string: asset.browser_download_url) else {
                     lastResult = .failed(message: "Release asset URL is invalid.")
                     return
                 }
@@ -121,8 +131,8 @@ final class UpdateChecker: ObservableObject {
                     releaseName: release.name ?? "HarvestPlus \(latestVersion)",
                     releaseNotes: release.body ?? "",
                     publishedAt: release.publishedDate ?? Date(),
-                    downloadURL: downloadURL,
-                    downloadSize: Int64(asset.size),
+                    zipURL: zipURL,
+                    zipSize: Int64(asset.size),
                     htmlURL: htmlURL
                 ))
             } else {
@@ -143,38 +153,18 @@ final class UpdateChecker: ObservableObject {
         Task { await checkForUpdates() }
     }
 
-    /// Download the `.pkg`, save to ~/Downloads, reveal in Finder. Returns the
-    /// file URL on success; throws on failure.
+    /// Copy the Terminal install one-liner to the general pasteboard. Returns
+    /// the command string so the UI can show a confirmation toast.
     @discardableResult
-    func downloadAndReveal(_ info: UpdateInfo) async throws -> URL {
-        guard state != .downloading else {
-            throw UpdateError.alreadyDownloading
-        }
-        state = .downloading
-        downloadProgress = 0
-        defer {
-            state = .idle
-            downloadProgress = 0
-        }
-
-        let (tempURL, response) = try await URLSession.shared.download(from: info.downloadURL)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw UpdateError.downloadFailed("Server returned an unexpected response.")
-        }
-
-        // Move to ~/Downloads with a stable, collision-proof filename.
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
-        let targetName = "HarvestPlus-\(info.version).pkg"
-        let targetURL = uniqueDestination(folder: downloads, preferredName: targetName)
-
-        try FileManager.default.moveItem(at: tempURL, to: targetURL)
-        NSWorkspace.shared.activateFileViewerSelecting([targetURL])
-        return targetURL
+    func copyInstallCommand() -> String {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(Self.installCommand, forType: .string)
+        return Self.installCommand
     }
 
-    /// Open the release page in the user's browser — fallback when the .pkg
-    /// download fails, or when the user prefers to read the release notes first.
+    /// Open the release page in the user's browser — for users who'd rather
+    /// read the notes or grab the .app.zip manually.
     func openReleasePage(_ info: UpdateInfo) {
         NSWorkspace.shared.open(info.htmlURL)
     }
@@ -239,21 +229,7 @@ final class UpdateChecker: ObservableObject {
         case (nil, _?):          return .orderedDescending
         case (_?, nil):          return .orderedAscending
         case (let x?, let y?):   return x.compare(y)
-        default:                 return .orderedSame
         }
-    }
-
-    private func uniqueDestination(folder: URL, preferredName: String) -> URL {
-        var candidate = folder.appendingPathComponent(preferredName)
-        var counter = 1
-        let base = (preferredName as NSString).deletingPathExtension
-        let ext = (preferredName as NSString).pathExtension
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            let name = "\(base) (\(counter)).\(ext)"
-            candidate = folder.appendingPathComponent(name)
-            counter += 1
-        }
-        return candidate
     }
 }
 
@@ -262,15 +238,11 @@ final class UpdateChecker: ObservableObject {
 enum UpdateError: LocalizedError {
     case network(String)
     case decoding(String)
-    case downloadFailed(String)
-    case alreadyDownloading
 
     var errorDescription: String? {
         switch self {
         case .network(let msg),
-             .decoding(let msg),
-             .downloadFailed(let msg):  return msg
-        case .alreadyDownloading:       return "A download is already in progress."
+             .decoding(let msg):  return msg
         }
     }
 }
@@ -294,11 +266,11 @@ private struct GitHubRelease: Decodable {
         return ISO8601DateFormatter().date(from: s)
     }
 
-    /// First asset whose filename ends in .pkg. If the release accidentally
-    /// ships multiple .pkg assets, we take the first — release authors should
-    /// publish only one.
-    func pkgAsset() -> Asset? {
-        assets.first { $0.name.lowercased().hasSuffix(".pkg") }
+    /// Match the .app.zip asset produced by Scripts/build.sh. We match on the
+    /// ".app.zip" suffix specifically so we don't accidentally grab a source
+    /// tarball that also ends in ".zip".
+    func installerAsset() -> Asset? {
+        assets.first { $0.name.lowercased().hasSuffix(".app.zip") }
     }
 
     struct Asset: Decodable {

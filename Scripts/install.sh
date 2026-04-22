@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# install.sh — one-shot HarvestPlus installer.
+#
+# Usage (copy-paste into Terminal):
+#   curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
+#
+# What it does:
+#   1. Downloads the latest HarvestPlus.app.zip from GitHub Releases.
+#   2. Extracts it into /Applications (replacing any existing install).
+#   3. Strips the com.apple.quarantine xattr so macOS won't prompt on launch.
+#   4. Launches the app.
+#
+# Why curl instead of a .pkg double-click?
+# ---------------------------------------
+# HarvestPlus is not Apple-notarised (we skip the $99/year Apple Developer
+# Program). On macOS 14+ a downloaded .pkg or .app shows Gatekeeper's
+# "Apple could not verify ..." wall, and since macOS 15 (Sequoia) the
+# right-click → Open escape hatch is gone — users have to visit
+# System Settings → Privacy & Security → Open Anyway for every install.
+#
+# curl, unlike a browser, does NOT mark downloaded files with the
+# com.apple.quarantine attribute. So an app installed via this script is
+# treated by macOS as a trusted local binary and launches without prompts.
+#
+
+set -euo pipefail
+
+OWNER="mrpolitic"
+REPO="HarvestPlus"
+APP_NAME="HarvestPlus"
+APPS_DIR="/Applications"
+INSTALL_PATH="$APPS_DIR/${APP_NAME}.app"
+
+# /releases/latest/download/<asset> 302s to the actual asset on the latest
+# non-prerelease release — avoids hitting the JSON API's rate limit.
+ASSET_URL="https://github.com/${OWNER}/${REPO}/releases/latest/download/${APP_NAME}.app.zip"
+
+# ---------------------------------------------------------------------------
+# Pretty output
+# ---------------------------------------------------------------------------
+
+blue()  { printf "\033[1;34m==>\033[0m %s\n" "$*"; }
+green() { printf "\033[1;32m✓\033[0m %s\n"  "$*"; }
+red()   { printf "\033[1;31m✗\033[0m %s\n"  "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+
+if [ "$(uname -s)" != "Darwin" ]; then
+    red "HarvestPlus is macOS-only. Detected: $(uname -s)."
+    exit 1
+fi
+
+if [ ! -w "$APPS_DIR" ]; then
+    red "Can't write to ${APPS_DIR}. Re-run with: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/${OWNER}/${REPO}/main/Scripts/install.sh)\""
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Download
+# ---------------------------------------------------------------------------
+
+TMP_DIR="$(mktemp -d -t harvestplus-install.XXXXXX)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+ZIP_PATH="$TMP_DIR/${APP_NAME}.app.zip"
+
+blue "Fetching ${APP_NAME}.app.zip from github.com/${OWNER}/${REPO}…"
+if ! curl -fL --progress-bar "$ASSET_URL" -o "$ZIP_PATH"; then
+    red "Download failed. The latest release may not have ${APP_NAME}.app.zip attached."
+    red "Check https://github.com/${OWNER}/${REPO}/releases/latest in a browser."
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Quit a running copy, if any
+# ---------------------------------------------------------------------------
+
+if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+    blue "Quitting running ${APP_NAME} so the new version can replace it…"
+    osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 || \
+        killall "$APP_NAME" 2>/dev/null || true
+    # Give the process a moment to release the bundle lock.
+    for _ in 1 2 3 4 5; do
+        pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+        sleep 1
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# Replace the install
+# ---------------------------------------------------------------------------
+
+# Stash the previous install so if extraction fails we can roll back.
+OLD_STASH=""
+if [ -d "$INSTALL_PATH" ]; then
+    OLD_STASH="$TMP_DIR/previous-${APP_NAME}.app"
+    mv "$INSTALL_PATH" "$OLD_STASH"
+fi
+
+blue "Extracting into ${APPS_DIR}…"
+# ditto preserves HFS metadata, symlinks, and perms inside the .app bundle.
+if ! /usr/bin/ditto -x -k "$ZIP_PATH" "$APPS_DIR"; then
+    red "Extraction failed."
+    # Roll back if we had a working install before.
+    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && mv "$OLD_STASH" "$INSTALL_PATH"
+    exit 1
+fi
+
+if [ ! -d "$INSTALL_PATH" ]; then
+    red "Extraction produced no ${APP_NAME}.app at ${INSTALL_PATH}."
+    [ -n "$OLD_STASH" ] && [ -d "$OLD_STASH" ] && mv "$OLD_STASH" "$INSTALL_PATH"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Strip quarantine + launch
+# ---------------------------------------------------------------------------
+
+blue "Stripping quarantine attribute…"
+/usr/bin/xattr -dr com.apple.quarantine "$INSTALL_PATH" 2>/dev/null || true
+
+blue "Launching ${APP_NAME}…"
+/usr/bin/open "$INSTALL_PATH"
+
+green "HarvestPlus is installed at ${INSTALL_PATH}."
+green "Look in your menu bar — there's a new icon. ⌘-click it to reveal the popover."

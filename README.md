@@ -27,8 +27,9 @@ Open HarvestPlus from the menu bar and you get:
 - **PDF reports** for any of those ranges, signed off with a clean layout.
 - **Banners** (optional) that nag you when you forget to stop the timer or
   when a meeting you haven't logged has just finished.
-- **Auto-updates** from GitHub Releases — one click, one signed installer,
-  back to work.
+- **Auto-updates** from GitHub Releases — the app polls daily, shows you
+  the release notes when a new version drops, and hands you a single
+  `curl | bash` command to install it.
 
 ---
 
@@ -48,8 +49,8 @@ Open HarvestPlus from the menu bar and you get:
 | **Idle detection** | If you walk away from the Mac for N minutes, HarvestPlus can auto-pause or prompt. Configurable threshold. |
 | **Keychain-backed token** | Your Harvest personal access token is stored in the login Keychain, not in UserDefaults. Never touches the app bundle or iCloud. |
 | **Sandboxed + Hardened Runtime** | The app is sandboxed and uses the hardened runtime — the same security posture Apple requires for notarised apps. The binary is ad-hoc signed (no Apple Developer Program membership required). |
-| **Quarantine-strip installer** | The `.pkg` runs a postinstall step that strips `com.apple.quarantine` from the installed `.app`, so day-to-day launches are prompt-free — no "app downloaded from the internet" dialog. |
-| **Self-updating** | Internal distribution shouldn't mean manually chasing coworkers down to install a new build. The app polls GitHub Releases daily and offers the new `.pkg` inline. |
+| **`curl \| bash` installer** | macOS 15 removed the right-click → Open escape hatch for unsigned apps, so a downloaded `.pkg`/`.app` now requires a trip to System Settings → Privacy & Security for every install. Our `Scripts/install.sh` sidesteps Gatekeeper entirely: `curl` doesn't tag files with `com.apple.quarantine`, and we strip any residual xattr before launch. No prompts, no System Settings visit. |
+| **Self-updating** | Internal distribution shouldn't mean manually chasing coworkers down to install a new build. The app polls GitHub Releases daily and, when a new version is available, gives you a one-click button that copies the install command to your clipboard. |
 
 ---
 
@@ -57,29 +58,39 @@ Open HarvestPlus from the menu bar and you get:
 
 ### For coworkers (you just want the app)
 
-1. Download `HarvestPlus-<version>.pkg` from the
-   [latest release](https://github.com/mrpolitic/HarvestPlus/releases/latest).
-2. **First-time install only:** the installer is not Apple-notarised (this is
-   an internal tool, not App Store software), so macOS will block the first
-   open with *"'HarvestPlus-X.Y.Z.pkg' can't be opened because Apple cannot
-   check it for malicious software."*
-   **Right-click the `.pkg` → Open → Open anyway** to dismiss it once.
-3. Authenticate with your Mac password. The installer finishes in a couple of
-   seconds. After install, the app launches without any further prompts —
-   the postinstall script strips the quarantine flag so Gatekeeper leaves
-   it alone.
-4. A small green icon appears in your menu bar. Click it → **Settings** (⌘,)
-   → **Integrations** → paste your **Harvest Account ID** and a
-   **Personal Access Token** from
+Open **Terminal** (`⌘-Space`, type "Terminal", enter), paste this, hit Return:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
+```
+
+That's it. The script:
+
+1. Downloads `HarvestPlus.app.zip` from the latest GitHub release.
+2. Extracts it into `/Applications/HarvestPlus.app` (replacing any previous
+   version).
+3. Strips the `com.apple.quarantine` flag so macOS launches it without any
+   "Apple cannot verify…" Gatekeeper prompt.
+4. Launches the app. A small icon appears in your menu bar.
+
+After first launch:
+
+1. Click the menu-bar icon → **Settings** (`⌘,`) → **Integrations** → paste
+   your **Harvest Account ID** and a **Personal Access Token** from
    [id.getharvest.com/developers](https://id.getharvest.com/developers)
    (the *Personal Access Tokens* section — **not** OAuth2 applications).
-5. Click the icon → **Calendar** → grant access when macOS prompts, if you
+2. Click the icon → **Calendar** → grant access when macOS prompts, if you
    want meeting overlays.
 
-> **Note on subsequent updates.** The in-app updater downloads new `.pkg`
-> files the same way a browser would, so the "can't check it for malicious
-> software" dialog appears on each update. One right-click → Open per
-> update and you're through — the installed app itself never prompts.
+> **Why Terminal and not a `.pkg`?** macOS 15 (Sequoia) tightened Gatekeeper
+> so that double-clicking an unsigned `.pkg` or `.app` no longer offers a
+> right-click → Open bypass — users would have to dig into System Settings →
+> Privacy & Security → "Open Anyway" for every install. The `curl | bash`
+> path avoids that friction: `curl` doesn't mark downloads with the
+> `com.apple.quarantine` attribute, so macOS treats the installed app as a
+> local binary and launches it silently. If you'd rather pay Apple $99/year
+> and sign + notarise the build, see
+> [`RELEASING.md`](./RELEASING.md#upgrading-to-the-signednotarised-path-later).
 
 **System requirements**
 
@@ -90,10 +101,10 @@ Open HarvestPlus from the menu bar and you get:
 **Keeping up to date**
 
 HarvestPlus checks for new releases automatically once per 24 hours. You can
-also force a check at any time from *Settings → General → About →
-Check for Updates*. Updates are delivered as `.pkg` files; click
-*Download & Install*, right-click → Open the downloaded `.pkg` (see
-above), and you're running the new version a minute later.
+also force a check from *Settings → General → About → Check for Updates*.
+When an update is available, click **Copy Install Command** — that copies
+the same `curl | bash` one-liner as above. Paste it into Terminal, hit
+Return, and the running app is replaced with the new version in-place.
 
 ---
 
@@ -129,9 +140,10 @@ HarvestPlus/
   Info.plist
 
 Scripts/
-  build.sh            # archive → export → pkgbuild pipeline
-  postinstall.sh      # strips com.apple.quarantine on install
-  ExportOptions.plist # Developer ID export config
+  build.sh            # archive → ditto HarvestPlus.app.zip (ad-hoc)
+  install.sh          # curl | bash installer run by coworkers
+  postinstall.sh      # (unused today — kept for future signed .pkg path)
+  ExportOptions.plist # (unused today — kept for future Developer ID path)
 ```
 
 ### App architecture
@@ -211,8 +223,10 @@ constants rather than constructed per-frame.
   per 24h (and manually on demand).
 - Semver compares the tag (or `name`) against `CFBundleShortVersionString`,
   handling prerelease tails (`1.2.0-beta.1 < 1.2.0`).
-- Downloads the first `.pkg` asset to `~/Downloads` and reveals it in
-  Finder via `NSWorkspace.activateFileViewerSelecting`.
+- On finding a newer release, copies a `curl | bash` one-liner to the
+  pasteboard (`NSPasteboard.general`) so the user can install from Terminal.
+  We don't download in-app: sandboxed apps can't replace their own bundle,
+  and a `URLSession`-downloaded `.zip` would inherit the quarantine xattr.
 
 ### Security & privacy
 
@@ -247,13 +261,16 @@ For the full release procedure, see [`RELEASING.md`](./RELEASING.md). The
 short version:
 
 ```bash
-./Scripts/build.sh --clean       # xcodebuild archive (ad-hoc) → pkgbuild
-gh release create v<v> build/HarvestPlus-<v>.pkg \
+./Scripts/build.sh --clean       # xcodebuild archive (ad-hoc) → ditto .app.zip
+gh release create v<v> \
+    build/HarvestPlus.app.zip build/HarvestPlus-<v>.app.zip \
     --title "HarvestPlus <v>" --notes-file CHANGELOG.md
 ```
 
-The auto-updater in the installed app picks up the new release on next
-daily poll (or when the user clicks *Check for Updates*).
+The fixed-name `HarvestPlus.app.zip` is what `install.sh` fetches from
+`/releases/latest/download/…`; the versioned copy is for humans browsing the
+Releases page. The auto-updater in the installed app picks up the new
+release on the next daily poll (or when the user clicks *Check for Updates*).
 
 ---
 

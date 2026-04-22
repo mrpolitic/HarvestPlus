@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-04-22
+
+### Changed
+
+- Distribution switched from `.pkg` double-click to a `curl | bash` installer
+  (`Scripts/install.sh`). macOS 15 (Sequoia) removed the right-click → Open
+  Gatekeeper bypass for unsigned installers, so a downloaded `.pkg`/`.app`
+  now requires a trip to System Settings → Privacy & Security on every
+  install. The new flow avoids that entirely: `curl`-fetched files aren't
+  marked with `com.apple.quarantine`, so macOS treats the installed app as
+  a trusted local binary and launches it without any prompt.
+- In-app updater no longer downloads the `.pkg` in-process. Instead it
+  copies the `curl | bash` one-liner to the clipboard; the user pastes it
+  into Terminal, which replaces the running app in place.
+- Release assets are now `HarvestPlus.app.zip` (fixed name, fetched by the
+  installer) plus a `HarvestPlus-<version>.app.zip` human-friendly copy.
+
+### Removed
+
+- `.pkg` installer output. `Scripts/postinstall.sh` and
+  `Scripts/ExportOptions.plist` are kept in the repo as scaffolding for a
+  future signed/notarised pipeline but are unused today.
+
 ## [1.0.0] — 2026-04-22
 
 ### Added

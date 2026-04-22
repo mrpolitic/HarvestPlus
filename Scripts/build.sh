@@ -1,21 +1,22 @@
 #!/bin/bash
 #
-# build.sh — produce a distributable HarvestPlus installer package.
+# build.sh — produce a distributable HarvestPlus .app.zip.
 #
-# This script is tuned for **ad-hoc distribution** — no paid Apple Developer
-# Program account is required. The app is ad-hoc signed (CODE_SIGN_IDENTITY=-)
-# and the .pkg is unsigned. Coworkers right-click → Open the .pkg once on
-# first install; the postinstall step strips com.apple.quarantine so the
-# installed app launches without prompts thereafter.
+# Tuned for ad-hoc distribution (no paid Apple Developer Program). The zip is
+# installed into /Applications by Scripts/install.sh, which strips the
+# quarantine xattr before first launch — so coworkers never see Gatekeeper
+# prompts on macOS 14+ (including 15/Sequoia+, which removed the right-click
+# → Open escape hatch).
 #
 # Pipeline:
 #   1. xcodebuild archive (ad-hoc signed) → build/HarvestPlus.xcarchive
-#   2. Pull .app directly from xcarchive/Products/Applications/
-#      (no xcodebuild -exportArchive — that step requires Developer ID)
-#   3. pkgbuild (unsigned) → build/HarvestPlus-<version>.pkg
-#      (postinstall.sh inside the pkg strips the quarantine xattr on install)
+#   2. Pull .app from xcarchive/Products/Applications/
+#   3. ditto -c -k --sequesterRsrc --keepParent → build/HarvestPlus.app.zip
+#      (+ a versioned copy build/HarvestPlus-<version>.app.zip for humans)
 #
-# The one output you ship to coworkers: build/HarvestPlus-<version>.pkg
+# The file you ship to GitHub Releases:
+#   build/HarvestPlus.app.zip
+#   (The install script always fetches this fixed name from /releases/latest.)
 #
 # Usage:
 #   ./Scripts/build.sh                # full build
@@ -30,8 +31,6 @@
 #   CODE_SIGN_IDENTITY  "-" for ad-hoc (default), or a Developer ID
 #                       Application cert name if you ever join the paid
 #                       Apple Developer Program.
-#   INSTALLER_IDENTITY  Unset by default → unsigned .pkg. Set to a
-#                       "Developer ID Installer: …" cert name to sign.
 #
 
 set -euo pipefail
@@ -40,16 +39,12 @@ set -euo pipefail
 # Paths
 # ---------------------------------------------------------------------------
 
-# Resolve the repo root regardless of where the script is invoked from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PROJECT="$REPO_ROOT/HarvestPlus.xcodeproj"
 BUILD_DIR="$REPO_ROOT/build"
 ARCHIVE_PATH="$BUILD_DIR/HarvestPlus.xcarchive"
-STAGING_ROOT="$BUILD_DIR/pkgroot"
-STAGING_SCRIPTS="$BUILD_DIR/pkgscripts"
-POSTINSTALL_SRC="$SCRIPT_DIR/postinstall.sh"
 
 # ---------------------------------------------------------------------------
 # Config (env-overridable)
@@ -79,18 +74,14 @@ require() {
 # ---------------------------------------------------------------------------
 
 require xcodebuild
-require pkgbuild
-require plutil
+require ditto
 
-# Catch the classic "xcode-select still on CLT" footgun early.
 if ! xcodebuild -version >/dev/null 2>&1; then
     die "xcodebuild is not usable. Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
 fi
 
-[ -d "$PROJECT" ]          || die "Xcode project not found at $PROJECT"
-[ -f "$POSTINSTALL_SRC" ]  || die "postinstall.sh not found at $POSTINSTALL_SRC"
+[ -d "$PROJECT" ] || die "Xcode project not found at $PROJECT"
 
-# Handle --clean
 if [ "${1:-}" = "--clean" ]; then
     log "Cleaning $BUILD_DIR"
     rm -rf "$BUILD_DIR"
@@ -116,7 +107,10 @@ BUILD_NUMBER="$(
 )"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 
-PKG_OUT="$BUILD_DIR/${PRODUCT_NAME}-${MARKETING_VERSION}.pkg"
+# Fixed name — the install script curls this exact filename from /releases/latest.
+ZIP_FIXED="$BUILD_DIR/${PRODUCT_NAME}.app.zip"
+# Versioned copy — for humans browsing the Releases page.
+ZIP_VERSIONED="$BUILD_DIR/${PRODUCT_NAME}-${MARKETING_VERSION}.app.zip"
 
 ok "Building ${PRODUCT_NAME} ${MARKETING_VERSION} (build ${BUILD_NUMBER})"
 if [ "$CODE_SIGN_IDENTITY" = "-" ]; then
@@ -131,7 +125,6 @@ fi
 
 log "Archiving (configuration: $CONFIGURATION)"
 
-# Archive with clean output — route noisy logs to a file, surface only on failure.
 ARCHIVE_LOG="$BUILD_DIR/archive.log"
 if ! xcodebuild archive \
         -project "$PROJECT" \
@@ -152,88 +145,58 @@ ok "Archive → $ARCHIVE_PATH"
 # 2) Pull .app from the archive
 # ---------------------------------------------------------------------------
 
-# Archive layout:
-#   HarvestPlus.xcarchive/
-#     Products/
-#       Applications/
-#         HarvestPlus.app   ← this
 APP_EXPORTED="$ARCHIVE_PATH/Products/Applications/${PRODUCT_NAME}.app"
 [ -d "$APP_EXPORTED" ] || die "Built .app not found at $APP_EXPORTED"
 ok "Built app → $APP_EXPORTED"
 
-# Sanity-check the signature (ad-hoc passes codesign verification).
 if ! codesign --verify --deep --strict --verbose=1 "$APP_EXPORTED" >/dev/null 2>&1; then
     die "Built .app failed codesign verification."
 fi
 
-# Confirm Hardened Runtime is on — macOS will flag its absence at launch.
 if ! codesign --display --verbose=4 "$APP_EXPORTED" 2>&1 | grep -q "flags=0x10000(runtime)"; then
     warn "Hardened Runtime flag not detected on the built .app."
 fi
 
 # ---------------------------------------------------------------------------
-# 3) Build the .pkg with postinstall
+# 3) Zip the .app (the only release asset)
 # ---------------------------------------------------------------------------
 
-log "Assembling installer root"
+log "Zipping → $ZIP_FIXED"
+rm -f "$ZIP_FIXED" "$ZIP_VERSIONED"
 
-# pkgbuild lays out files at the package root; we want the .app installed to
-# /Applications/HarvestPlus.app, so mirror that path in a staging dir.
-rm -rf "$STAGING_ROOT" "$STAGING_SCRIPTS"
-mkdir -p "$STAGING_ROOT/Applications"
-mkdir -p "$STAGING_SCRIPTS"
+# --keepParent keeps HarvestPlus.app/ as the top-level entry inside the zip,
+# so `ditto -x -k <zip> /Applications` lands the .app at /Applications/HarvestPlus.app.
+# --sequesterRsrc stores HFS metadata in a way that unzips cleanly on all macOS
+# versions (including Finder-based Archive Utility).
+/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_EXPORTED" "$ZIP_FIXED"
 
-# Copy the built .app into the staging root (preserve symlinks/perms with ditto).
-/usr/bin/ditto "$APP_EXPORTED" "$STAGING_ROOT/Applications/${PRODUCT_NAME}.app"
+# Second copy with the version in the filename, for humans.
+cp "$ZIP_FIXED" "$ZIP_VERSIONED"
 
-# Scripts must be executable or pkgbuild silently ignores them.
-cp "$POSTINSTALL_SRC" "$STAGING_SCRIPTS/postinstall"
-chmod +x "$STAGING_SCRIPTS/postinstall"
-
-# ---------------------------------------------------------------------------
-# pkgbuild — unsigned by default, can be signed via INSTALLER_IDENTITY env
-# ---------------------------------------------------------------------------
-
-log "Building package → $PKG_OUT"
-
-PKGBUILD_ARGS=(
-    --root            "$STAGING_ROOT"
-    --scripts         "$STAGING_SCRIPTS"
-    --identifier      "${BUNDLE_IDENTIFIER}.pkg"
-    --version         "$MARKETING_VERSION"
-    --install-location "/"
-)
-
-if [ -n "${INSTALLER_IDENTITY:-}" ]; then
-    ok "Signing installer with: $INSTALLER_IDENTITY"
-    PKGBUILD_ARGS+=(--sign "$INSTALLER_IDENTITY")
-else
-    log "Building unsigned .pkg (set INSTALLER_IDENTITY to sign with Developer ID)"
-fi
-
-pkgbuild "${PKGBUILD_ARGS[@]}" "$PKG_OUT"
-ok "Package → $PKG_OUT"
+ok "Zip → $ZIP_FIXED"
+ok "Zip → $ZIP_VERSIONED"
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
-SIZE_HUMAN="$(du -h "$PKG_OUT" | awk '{ print $1 }')"
+SIZE_HUMAN="$(du -h "$ZIP_FIXED" | awk '{ print $1 }')"
 cat <<EOF
 
 ──────────────────────────────────────────────────────────
   HarvestPlus ${MARKETING_VERSION} (build ${BUILD_NUMBER})
   Built app     : $APP_EXPORTED
-  Installer     : $PKG_OUT  (${SIZE_HUMAN})
+  Release asset : $ZIP_FIXED             (${SIZE_HUMAN})
+  Versioned copy: $ZIP_VERSIONED
 
-  Coworkers will need to right-click → Open the .pkg on first
-  install (it's unsigned). After install, the app launches
-  prompt-free — the postinstall script strips quarantine.
+  Coworkers install with one Terminal command:
+    curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
 
   Next step — publish on GitHub:
     git tag v${MARKETING_VERSION}
     git push origin v${MARKETING_VERSION}
-    gh release create v${MARKETING_VERSION} "$PKG_OUT" \\
+    gh release create v${MARKETING_VERSION} \\
+        "$ZIP_FIXED" "$ZIP_VERSIONED" \\
         --title "HarvestPlus ${MARKETING_VERSION}" \\
         --notes-file CHANGELOG.md
 
