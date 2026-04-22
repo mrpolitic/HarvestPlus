@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandbox (required) -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Outgoing network — Harvest API + GitHub update checks -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Calendar access — EventKit for meeting overlays -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+
+	<!-- User-selected files — PDF export destination picker -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- Apple Events → Terminal — used by "Install Update" to open Terminal
+	     and run the install script without writing a file to disk.
+	     macOS shows a one-time consent dialog: "HarvestPlus wants to control
+	     Terminal." After the user clicks OK it is never asked again. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

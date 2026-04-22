@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] — 2026-04-22
+
+### Fixed
+
+- "Install Update" button no longer shows "is damaged and can't be opened".
+  The previous approach wrote a `.command` script to the sandbox temp
+  directory, then opened it in Terminal. macOS automatically applies
+  `com.apple.quarantine` to executable files created by sandboxed apps, and
+  Gatekeeper blocks them even after `removexattr` — the xattr is re-applied
+  after the write. Fix: drop the file entirely. The button now uses
+  `NSAppleScript` to send `do script` directly to Terminal via Apple Events.
+  No file = no quarantine. macOS shows a one-time consent dialog
+  ("HarvestPlus wants to control Terminal.") on first use; after clicking
+  OK it is never asked again. Requires the new
+  `com.apple.security.automation.apple-events` entitlement (added to
+  `HarvestPlus.entitlements` and wired up in the Xcode build settings).
+
 ## [1.0.6] — 2026-04-22
 
 ### Fixed
