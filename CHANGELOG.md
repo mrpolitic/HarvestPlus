@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] — 2026-04-22
+
+### Fixed
+
+- Keychain prompts reduced from 4 to 2 (one-time, on first launch after
+  install). `save()` previously used delete-then-add: `SecItemDelete` carries
+  its own ACL check, so macOS prompted once for the read and again for the
+  delete — 2 prompts per credential × 2 credentials = 4 prompts. Replaced
+  with `SecItemUpdate`+add (update in place if the item exists, add fresh if
+  not). A single update operation reuses the session-level access already
+  granted by the preceding read, eliminating the extra delete prompts.
+  Removed the now-unused `migrateToAllowAllAccess()` helper.
+
 ## [1.0.5] — 2026-04-22
 
 ### Fixed

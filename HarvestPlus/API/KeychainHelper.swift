@@ -17,49 +17,39 @@ enum KeychainHelper {
     // MARK: - Save
 
     static func save(key: String, data: Data) throws {
-        // Delete any existing item first
-        try? delete(key: key)
+        // Build an "allow all" access ACL so the item survives ad-hoc re-signs
+        // without prompting. SecAccessCreate with an empty (non-nil) trusted-
+        // applications array means any process running as the current user can
+        // access the item — no per-binary ACL restriction.
+        var access: SecAccess?
+        SecAccessCreate("HarvestPlus credentials" as CFString, [] as CFArray, &access)
 
-        var query: [String: Any] = [
+        let lookupQuery: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String:   data
+            kSecAttrAccount as String: key
         ]
 
-        // Attach an "allow all" access ACL so the keychain item survives
-        // app updates without triggering a password prompt each time.
-        //
-        // Why this is needed:
-        //   HarvestPlus is ad-hoc signed — every new build produces a unique
-        //   code signature. Without an explicit kSecAttrAccess, macOS records
-        //   the creating binary's signature in the item's ACL. Any subsequent
-        //   binary (even a rebuilt copy of the same app) is then treated as an
-        //   "untrusted" accessor and the user sees "HarvestPlus wants to use
-        //   your confidential information stored in 'com.harvestplus' in your
-        //   keychain." on every install.
-        //
-        // Fix:
-        //   SecAccessCreate with an empty (non-nil) trusted-applications array
-        //   creates an access object with no per-application restriction —
-        //   any process running as the current user can read the item without
-        //   prompting. This is appropriate for user-owned credentials stored in
-        //   the user's own login keychain; the item never leaves the device.
-        var access: SecAccess?
-        let accessStatus = SecAccessCreate(
-            "HarvestPlus credentials" as CFString,
-            [] as CFArray,          // empty = any app; nil = calling app only
-            &access
-        )
-        if accessStatus == errSecSuccess, let access {
-            query[kSecAttrAccess as String] = access
-        }
-        // If SecAccessCreate fails (shouldn't, but be defensive), we fall
-        // through without kSecAttrAccess — same as the old behaviour.
+        // Prefer SecItemUpdate over delete+add. Deleting an existing item goes
+        // through the same ACL check as reading it, so a delete-then-add
+        // strategy triggers two prompts per item (one read, one delete) instead
+        // of one. SecItemUpdate modifies the item in place — if the session-
+        // level "Allow" from the preceding read covers the update (which macOS
+        // treats as the same access right), the user sees only the read prompt.
+        var updateAttribs: [String: Any] = [kSecValueData as String: data]
+        if let access { updateAttribs[kSecAttrAccess as String] = access }
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw KeychainError.saveFailed(status)
+        let updateStatus = SecItemUpdate(lookupQuery as CFDictionary, updateAttribs as CFDictionary)
+
+        if updateStatus == errSecItemNotFound {
+            // Item does not exist yet — add it fresh with the allow-all ACL.
+            var addQuery = lookupQuery
+            addQuery[kSecValueData as String] = data
+            if let access { addQuery[kSecAttrAccess as String] = access }
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw KeychainError.saveFailed(addStatus) }
+        } else if updateStatus != errSecSuccess {
+            throw KeychainError.saveFailed(updateStatus)
         }
     }
 
@@ -115,23 +105,6 @@ enum KeychainHelper {
         }
     }
 
-    // MARK: - Migration
-
-    /// Re-save every known keychain item so it picks up the "allow all"
-    /// access ACL introduced in 1.0.3. Call once at app launch (idempotent).
-    ///
-    /// Items created before 1.0.3 have the old binary's code signature baked
-    /// into their ACL; re-saving them with the updated `save()` replaces that
-    /// with the unrestricted access object. The user may see one last prompt
-    /// per item during this migration run — subsequent launches and updates
-    /// will be prompt-free.
-    static func migrateToAllowAllAccess() {
-        let keys = [KeychainKey.harvestToken, KeychainKey.harvestAccountId]
-        for key in keys {
-            guard let data = try? load(key: key) else { continue }
-            try? save(key: key, data: data)
-        }
-    }
 }
 
 // MARK: - Keychain Keys
