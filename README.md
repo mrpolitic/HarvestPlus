@@ -64,14 +64,49 @@ Either way the script:
    "Apple cannot verify…" Gatekeeper prompt.
 4. Launches the app. A small icon appears in your menu bar.
 
-After first launch:
+> The icon will be grey and show no data until you connect your Harvest
+> account — see the next section.
 
-1. Click the menu-bar icon → **Settings** (`⌘,`) → **Integrations** → paste
-   your **Harvest Account ID** and a **Personal Access Token** from
-   [id.getharvest.com/developers](https://id.getharvest.com/developers)
-   (the *Personal Access Tokens* section — **not** OAuth2 applications).
-2. Click the icon → **Calendar** → grant access when macOS prompts, if you
-   want meeting overlays.
+---
+
+## Connecting to Harvest
+
+The app needs your Harvest Account ID and a personal access token before it
+can do anything. This is a one-time step.
+
+### 1 — Get your credentials from Harvest
+
+Go to **[id.getharvest.com/developers](https://id.getharvest.com/developers)**.
+
+You'll see two things you need on that page:
+
+- **Account ID** — listed at the top of the page next to your account name.
+  It's a plain number (e.g. `1234567`).
+- **Personal Access Token** — scroll to the *Personal Access Tokens* section
+  and click **Create new personal access token**. Give it any name
+  (e.g. "HarvestPlus"), click Create, and copy the token. You won't be able
+  to see it again after closing that dialog.
+
+> Make sure you're in the **Personal Access Tokens** section — not
+> *OAuth2 Applications*. OAuth tokens won't work here.
+
+### 2 — Enter them in HarvestPlus
+
+1. Click the HarvestPlus icon in your menu bar.
+2. Open **Settings** — either press `⌘,` or click the gear icon.
+3. Go to the **Integrations** tab.
+4. Paste your **Account ID** and **Personal Access Token** into the two fields.
+5. Click **Save** (or press Return).
+
+The icon will update immediately to show your current timer state. If you see
+an error, double-check that you copied the full token and the right Account ID.
+
+### 3 — Connect your calendar (optional)
+
+Still in Settings, switch to the **Integrations** tab and scroll down to the
+Calendar section. Click **Grant Access** and approve the macOS prompt. This
+lets HarvestPlus show your calendar meetings alongside your time entries so
+you can spot unlogged meetings.
 
 > **Why Terminal and not a `.pkg`?** macOS 15 (Sequoia) tightened Gatekeeper
 > so that double-clicking an unsigned `.pkg` or `.app` no longer offers a
