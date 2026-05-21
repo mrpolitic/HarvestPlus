@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] — 2026-05-22
+
+### Fixed
+
+- Keychain "change access permissions" / "change the owner" password
+  prompts on every launch (visible in 1.0.3 through 1.0.9). Two layered
+  causes, both fixed:
+  - `KeychainHelper.save()` attached a new `kSecAttrAccess` ACL to every
+    `SecItemUpdate` call. macOS treats updating an item's ACL as a
+    privileged operation and challenges the user unconditionally,
+    regardless of whether the new ACL is identical to the old one. Fix:
+    only set `kSecAttrAccess` on the initial `SecItemAdd` (item creation),
+    never on update.
+  - `AppState.init()` ran a "migration re-save" on every launch — it
+    read both credentials and immediately wrote them back, which used to
+    refresh the ad-hoc ACL. With a stable Developer ID signature this
+    migration is unnecessary, and combined with the bug above it was
+    triggering 2–4 ACL prompts on every single launch. The re-save has
+    been removed entirely.
+  Net effect: launches are now silent. The keychain ACL gets set exactly
+  once, when the user first enters their credentials in Settings.
+
 ## [1.0.9] — 2026-05-21
 
 ### Changed

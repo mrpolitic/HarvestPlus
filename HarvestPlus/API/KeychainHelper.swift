@@ -17,32 +17,33 @@ enum KeychainHelper {
     // MARK: - Save
 
     static func save(key: String, data: Data) throws {
-        // Build an "allow all" access ACL so the item survives ad-hoc re-signs
-        // without prompting. SecAccessCreate with an empty (non-nil) trusted-
-        // applications array means any process running as the current user can
-        // access the item — no per-binary ACL restriction.
-        var access: SecAccess?
-        SecAccessCreate("HarvestPlus credentials" as CFString, [] as CFArray, &access)
-
         let lookupQuery: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key
         ]
 
-        // Prefer SecItemUpdate over delete+add. Deleting an existing item goes
-        // through the same ACL check as reading it, so a delete-then-add
-        // strategy triggers two prompts per item (one read, one delete) instead
-        // of one. SecItemUpdate modifies the item in place — if the session-
-        // level "Allow" from the preceding read covers the update (which macOS
-        // treats as the same access right), the user sees only the read prompt.
-        var updateAttribs: [String: Any] = [kSecValueData as String: data]
-        if let access { updateAttribs[kSecAttrAccess as String] = access }
-
+        // UPDATE PATH — change the stored value only. Critically, we do NOT
+        // include kSecAttrAccess here. Passing an ACL to SecItemUpdate is
+        // treated by macOS as a request to modify the item's access controls,
+        // which is a privileged operation and unconditionally triggers a
+        // "change access permissions" / "change the owner" password prompt
+        // every single time. By updating only the data, the existing ACL
+        // (set on creation) keeps working and the user sees no dialog.
+        let updateAttribs: [String: Any] = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(lookupQuery as CFDictionary, updateAttribs as CFDictionary)
 
         if updateStatus == errSecItemNotFound {
-            // Item does not exist yet — add it fresh with the allow-all ACL.
+            // ADD PATH — the item doesn't exist yet, so create it. This is
+            // the *only* place we attach an ACL. SecAccessCreate with an
+            // empty trusted-applications array tells macOS "any process
+            // running as the current user may access this item" — so the
+            // keychain doesn't keep challenging us when the app's signature
+            // changes between builds. SecItemAdd on a brand-new item doesn't
+            // prompt: there's no existing ACL to override.
+            var access: SecAccess?
+            SecAccessCreate("HarvestPlus credentials" as CFString, [] as CFArray, &access)
+
             var addQuery = lookupQuery
             addQuery[kSecValueData as String] = data
             if let access { addQuery[kSecAttrAccess as String] = access }
