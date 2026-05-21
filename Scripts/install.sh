@@ -13,7 +13,7 @@
 # What it does:
 #   1. Downloads the latest HarvestPlus.app.zip from GitHub Releases.
 #   2. Extracts it into ~/Applications (or /Applications with --system).
-#   3. Strips the com.apple.quarantine xattr so macOS won't prompt on launch.
+#   3. Strips the com.apple.quarantine xattr (defensive — see below).
 #   4. Launches the app.
 #
 # Why ~/Applications by default?
@@ -26,15 +26,19 @@
 #
 # Why curl instead of a .pkg double-click?
 # ----------------------------------------
-# HarvestPlus isn't Apple-notarised (we skip the $99/year Apple Developer
-# Program). On macOS 14+ a downloaded .pkg or .app shows Gatekeeper's
-# "Apple could not verify ..." wall, and since macOS 15 (Sequoia) the
-# right-click → Open escape hatch is gone — users have to visit
-# System Settings → Privacy & Security → Open Anyway for every install.
+# Since 1.0.9, HarvestPlus is signed with a Developer ID Application
+# certificate and notarized by Apple, with the notarization ticket
+# stapled to the .app. That means Gatekeeper accepts it offline — no
+# "is damaged", no "unidentified developer", no System Settings trip.
 #
-# curl, unlike a browser, does NOT mark downloaded files with the
-# com.apple.quarantine attribute. So an app installed via this script is
-# treated by macOS as a trusted local binary and launches without prompts.
+# The curl path is still the canonical install for two reasons:
+#   - One Terminal command beats a download-then-double-click flow.
+#   - The same command is what the in-app updater runs to upgrade in
+#     place, so users only ever learn one workflow.
+#
+# The quarantine-strip below is now defensive: notarized apps don't need
+# it, but a leftover xattr from a previous unsigned install is harmless
+# to clear.
 #
 
 set -euo pipefail

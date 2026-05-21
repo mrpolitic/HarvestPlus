@@ -1,25 +1,29 @@
 #!/bin/bash
 #
-# build.sh — produce a distributable HarvestPlus .app.zip.
-#
-# Tuned for ad-hoc distribution (no paid Apple Developer Program). The zip is
-# installed into /Applications by Scripts/install.sh, which strips the
-# quarantine xattr before first launch — so coworkers never see Gatekeeper
-# prompts on macOS 14+ (including 15/Sequoia+, which removed the right-click
-# → Open escape hatch).
+# build.sh — produce a signed + notarized + stapled HarvestPlus .app.zip.
 #
 # Pipeline:
-#   1. xcodebuild archive (ad-hoc signed) → build/HarvestPlus.xcarchive
-#   2. Pull .app from xcarchive/Products/Applications/
-#   3. ditto -c -k --sequesterRsrc --keepParent → build/HarvestPlus.app.zip
-#      (+ a versioned copy build/HarvestPlus-<version>.app.zip for humans)
+#   1. xcodebuild archive, signed with the Developer ID Application cert
+#      (hardened runtime + entitlements, both already on the build config).
+#   2. ditto-zip the .app and submit to Apple's notary service via
+#      `xcrun notarytool submit --wait`.
+#   3. `xcrun stapler staple` the returned ticket onto the .app so Gatekeeper
+#      accepts it offline.
+#   4. ditto-zip the stapled .app for distribution.
 #
 # The file you ship to GitHub Releases:
 #   build/HarvestPlus.app.zip
 #   (The install script always fetches this fixed name from /releases/latest.)
 #
+# Prerequisites (one-time setup on this machine):
+#   - Developer ID Application cert installed in the login keychain.
+#     Verify: security find-identity -v -p codesigning | grep "Developer ID"
+#   - notarytool profile "AC_NOTARY" stored in the keychain.
+#     Create: xcrun notarytool store-credentials AC_NOTARY \
+#                 --apple-id <you> --team-id <team> --password <app-spec-pw>
+#
 # Usage:
-#   ./Scripts/build.sh                # full build
+#   ./Scripts/build.sh                # full signed + notarized build
 #   ./Scripts/build.sh --clean        # wipe build/ first
 #
 # Environment overrides (optional):
@@ -27,10 +31,9 @@
 #   SCHEME              HarvestPlus (default)
 #   PRODUCT_NAME        HarvestPlus (default)
 #   BUNDLE_IDENTIFIER   com.qampo.HarvestPlus (default)
-#
-#   CODE_SIGN_IDENTITY  "-" for ad-hoc (default), or a Developer ID
-#                       Application cert name if you ever join the paid
-#                       Apple Developer Program.
+#   CODE_SIGN_IDENTITY  Developer ID Application cert name
+#   DEVELOPMENT_TEAM    PA8H58YHD6 (default)
+#   NOTARY_PROFILE      AC_NOTARY (the keychain profile name)
 #
 
 set -euo pipefail
@@ -54,7 +57,9 @@ CONFIGURATION="${CONFIGURATION:-Release}"
 SCHEME="${SCHEME:-HarvestPlus}"
 PRODUCT_NAME="${PRODUCT_NAME:-HarvestPlus}"
 BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-com.qampo.HarvestPlus}"
-CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"   # "-" = ad-hoc
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-Developer ID Application: Martin Razvan Politic (PA8H58YHD6)}"
+DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-PA8H58YHD6}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-AC_NOTARY}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,6 +80,7 @@ require() {
 
 require xcodebuild
 require ditto
+require security
 
 if ! xcodebuild -version >/dev/null 2>&1; then
     die "xcodebuild is not usable. Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
@@ -88,6 +94,16 @@ if [ "${1:-}" = "--clean" ]; then
 fi
 
 mkdir -p "$BUILD_DIR"
+
+# Verify the signing identity exists in the keychain
+if ! security find-identity -v -p codesigning | grep -q "$CODE_SIGN_IDENTITY"; then
+    die "Code signing identity not found in keychain: $CODE_SIGN_IDENTITY"
+fi
+
+# Verify the notary profile is present
+if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    die "notarytool profile '$NOTARY_PROFILE' not configured. See header for setup."
+fi
 
 # ---------------------------------------------------------------------------
 # Resolve marketing version (from project.pbxproj MARKETING_VERSION)
@@ -113,14 +129,11 @@ ZIP_FIXED="$BUILD_DIR/${PRODUCT_NAME}.app.zip"
 ZIP_VERSIONED="$BUILD_DIR/${PRODUCT_NAME}-${MARKETING_VERSION}.app.zip"
 
 ok "Building ${PRODUCT_NAME} ${MARKETING_VERSION} (build ${BUILD_NUMBER})"
-if [ "$CODE_SIGN_IDENTITY" = "-" ]; then
-    log "Code-signing identity: ad-hoc (no Apple Developer account required)"
-else
-    log "Code-signing identity: $CODE_SIGN_IDENTITY"
-fi
+log "Signing identity : $CODE_SIGN_IDENTITY"
+log "Notary profile   : $NOTARY_PROFILE"
 
 # ---------------------------------------------------------------------------
-# 1) Archive (ad-hoc signed)
+# 1) Archive (Developer ID signed, hardened runtime)
 # ---------------------------------------------------------------------------
 
 log "Archiving (configuration: $CONFIGURATION)"
@@ -134,7 +147,7 @@ if ! xcodebuild archive \
         -destination "generic/platform=macOS" \
         CODE_SIGN_STYLE=Manual \
         CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
-        DEVELOPMENT_TEAM="" \
+        DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
         > "$ARCHIVE_LOG" 2>&1; then
     tail -80 "$ARCHIVE_LOG" >&2
     die "xcodebuild archive failed (full log: $ARCHIVE_LOG)"
@@ -142,7 +155,7 @@ fi
 ok "Archive → $ARCHIVE_PATH"
 
 # ---------------------------------------------------------------------------
-# 2) Pull .app from the archive
+# 2) Pull .app from the archive and verify the signature
 # ---------------------------------------------------------------------------
 
 APP_EXPORTED="$ARCHIVE_PATH/Products/Applications/${PRODUCT_NAME}.app"
@@ -153,15 +166,68 @@ if ! codesign --verify --deep --strict --verbose=1 "$APP_EXPORTED" >/dev/null 2>
     die "Built .app failed codesign verification."
 fi
 
-if ! codesign --display --verbose=4 "$APP_EXPORTED" 2>&1 | grep -q "flags=0x10000(runtime)"; then
-    warn "Hardened Runtime flag not detected on the built .app."
+SIGN_INFO="$(codesign --display --verbose=4 "$APP_EXPORTED" 2>&1)"
+if ! printf '%s\n' "$SIGN_INFO" | grep -qF "0x10000"; then
+    printf '%s\n' "$SIGN_INFO" >&2
+    die "Hardened Runtime flag not detected on the built .app — notary will reject."
+fi
+ok "Signature verified (Developer ID, hardened runtime)"
+
+# ---------------------------------------------------------------------------
+# 3) Zip + submit to Apple's notary service
+# ---------------------------------------------------------------------------
+
+NOTARIZE_ZIP="$BUILD_DIR/${PRODUCT_NAME}-for-notarization.zip"
+log "Packaging for notary submission → $NOTARIZE_ZIP"
+rm -f "$NOTARIZE_ZIP"
+/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_EXPORTED" "$NOTARIZE_ZIP"
+
+log "Submitting to Apple's notary service (typically 1–3 min)…"
+NOTARIZE_LOG="$BUILD_DIR/notarize.log"
+if ! xcrun notarytool submit "$NOTARIZE_ZIP" \
+        --keychain-profile "$NOTARY_PROFILE" \
+        --wait \
+        > "$NOTARIZE_LOG" 2>&1; then
+    cat "$NOTARIZE_LOG" >&2
+    die "Notarization submission failed (full log: $NOTARIZE_LOG)"
+fi
+
+if ! grep -q "status: Accepted" "$NOTARIZE_LOG"; then
+    cat "$NOTARIZE_LOG" >&2
+    SUBMISSION_ID="$(awk -F': ' '/^  id:/ { print $2; exit }' "$NOTARIZE_LOG")"
+    if [ -n "$SUBMISSION_ID" ]; then
+        warn "Fetching detailed notarization log for $SUBMISSION_ID…"
+        xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "$NOTARY_PROFILE" >&2 || true
+    fi
+    die "Notarization rejected. See above for Apple's reason."
+fi
+ok "Notarization accepted by Apple."
+rm -f "$NOTARIZE_ZIP"
+
+# ---------------------------------------------------------------------------
+# 4) Staple the ticket so Gatekeeper accepts the app offline
+# ---------------------------------------------------------------------------
+
+log "Stapling notarization ticket to the .app…"
+STAPLE_LOG="$BUILD_DIR/staple.log"
+if ! xcrun stapler staple "$APP_EXPORTED" > "$STAPLE_LOG" 2>&1; then
+    cat "$STAPLE_LOG" >&2
+    die "Stapling failed."
+fi
+xcrun stapler validate "$APP_EXPORTED" >/dev/null || die "Stapler validation failed."
+ok "Ticket stapled — Gatekeeper will accept this offline."
+
+if spctl --assess --type execute --verbose "$APP_EXPORTED" 2>&1 | grep -q "accepted"; then
+    ok "Gatekeeper assessment: accepted."
+else
+    warn "Gatekeeper assessment did not return 'accepted' — investigate before shipping."
 fi
 
 # ---------------------------------------------------------------------------
-# 3) Zip the .app (the only release asset)
+# 5) Final zip for distribution
 # ---------------------------------------------------------------------------
 
-log "Zipping → $ZIP_FIXED"
+log "Zipping for release → $ZIP_FIXED"
 rm -f "$ZIP_FIXED" "$ZIP_VERSIONED"
 
 # --keepParent keeps HarvestPlus.app/ as the top-level entry inside the zip,
@@ -169,8 +235,6 @@ rm -f "$ZIP_FIXED" "$ZIP_VERSIONED"
 # --sequesterRsrc stores HFS metadata in a way that unzips cleanly on all macOS
 # versions (including Finder-based Archive Utility).
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_EXPORTED" "$ZIP_FIXED"
-
-# Second copy with the version in the filename, for humans.
 cp "$ZIP_FIXED" "$ZIP_VERSIONED"
 
 ok "Zip → $ZIP_FIXED"
@@ -188,6 +252,9 @@ cat <<EOF
   Built app     : $APP_EXPORTED
   Release asset : $ZIP_FIXED             (${SIZE_HUMAN})
   Versioned copy: $ZIP_VERSIONED
+
+  Signed    : ${CODE_SIGN_IDENTITY}
+  Notarized : yes (ticket stapled)
 
   Coworkers install with one Terminal command:
     curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash

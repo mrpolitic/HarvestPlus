@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] — 2026-05-21
+
+### Changed
+
+- App is now **signed with a Developer ID Application certificate and
+  notarized by Apple**, with the notarization ticket stapled to the .app.
+  Practical effects:
+  - No more "is damaged and can't be opened" or "unidentified developer"
+    walls. Gatekeeper accepts the app offline.
+  - No System Settings → Privacy & Security trip on install.
+  - Stable code signature across builds, so the keychain stops re-prompting
+    on every update. (Existing users may see one final prompt on the upgrade
+    from the ad-hoc-signed 1.0.8 to this build, then never again.)
+  - Users who previously denied a Gatekeeper prompt for the unsigned build
+    are unaffected — the new install replaces the rejected binary entirely.
+- `Scripts/build.sh` now signs with the Developer ID Application cert,
+  submits the zip to Apple's notary service via `xcrun notarytool`, waits
+  for approval, and staples the returned ticket. Requires a one-time
+  `notarytool store-credentials` setup (documented in the script header).
+
 ## [1.0.8] — 2026-04-22
 
 ### Fixed
