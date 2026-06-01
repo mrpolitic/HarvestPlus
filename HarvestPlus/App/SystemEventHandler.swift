@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 15/04/2026.
 //
+//  Reacts to the system events surfaced by AppDelegate: auto-stops the timer
+//  on sleep / screen lock (when enabled) and schedules the end-of-day and
+//  end-of-week summary banners.
+//
 
 import Foundation
 import Combine
@@ -102,11 +106,16 @@ final class SystemEventHandler: ObservableObject {
     /// Checks every 60 seconds if it's time to show a summary.
     private func scheduleNextSummaryCheck() {
         eodTimer?.invalidate()
-        eodTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // .common modes so the summary check keeps firing while the popover or a
+        // modal/tracking loop is open — otherwise the narrow EOD/EOW window
+        // (a 5-minute band once a day) could be missed entirely.
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkSummaries()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        eodTimer = timer
     }
 
     private func checkSummaries() {
@@ -166,7 +175,8 @@ final class SystemEventHandler: ObservableObject {
         let daySummary = OvertimeCalculator.daySummary(
             date: Date(),
             entries: appState.todayEntries,
-            settings: appState.settings
+            settings: appState.settings,
+            polledAt: appState.lastPolledAt
         )
 
         appState.bannerManager?.showBanner(mode: .eodSummary(daySummary))

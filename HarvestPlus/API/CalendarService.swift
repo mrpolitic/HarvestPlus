@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 15/04/2026.
 //
+//  EventKit wrapper. Manages calendar-access authorization and reads the
+//  user's events for a given day, filtered to the calendars they've enabled.
+//  Feeds the "Meetings today" list in the popover and the Daily dashboard.
+//
 
 import Foundation
 import EventKit

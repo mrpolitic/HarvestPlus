@@ -2,7 +2,32 @@
 //  KeychainHelper.swift
 //  HarvestPlus
 //
-//  Created by Razvan Politic on 14/04/2026.
+//  Thin wrapper around Keychain Services. Uses the **data-protection
+//  keychain** (the same API as iOS) rather than macOS's legacy
+//  SecKeychain — that's the single change that makes credential reads
+//  silent across Debug builds, Release builds, ad-hoc re-signs, and any
+//  future signature rotation.
+//
+//  Why the data-protection keychain?
+//  ---------------------------------
+//  Legacy macOS keychain uses per-binary ACLs (SecAccessCreate +
+//  kSecAttrAccess). Every time the binary's code signature changes,
+//  macOS challenges the user with a password prompt — even with an
+//  "empty trusted-apps" SecAccess (which, contrary to lore, is not
+//  actually "allow all"; it's treated like nil in practice and falls
+//  back to "only the creator binary").
+//
+//  The data-protection keychain replaces per-binary ACLs with **access
+//  groups**. Access is granted to any binary that:
+//    - is signed with the same Apple team ID, and
+//    - declares the same access group via the `keychain-access-groups`
+//      entitlement.
+//
+//  Our entitlement declares `$(AppIdentifierPrefix)com.qampo.HarvestPlus`
+//  which Xcode expands at signing time to `PA8H58YHD6.com.qampo.HarvestPlus`.
+//  Both Debug (Apple Development cert) and Release (Developer ID
+//  Application cert) signatures carry team `PA8H58YHD6`, so both
+//  binaries see the same keychain items without prompting.
 //
 
 import Foundation
@@ -14,39 +39,37 @@ enum KeychainHelper {
 
     private static let service = "com.harvestplus"
 
+    /// Base attributes shared by every operation. The
+    /// `kSecUseDataProtectionKeychain` flag routes the call to the modern
+    /// keychain on macOS; without it Keychain Services falls back to the
+    /// legacy SecKeychain.
+    private static var baseQuery: [String: Any] {
+        [
+            kSecClass as String:                     kSecClassGenericPassword,
+            kSecAttrService as String:               service,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+    }
+
     // MARK: - Save
 
     static func save(key: String, data: Data) throws {
-        let lookupQuery: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
+        var lookup = baseQuery
+        lookup[kSecAttrAccount as String] = key
 
-        // UPDATE PATH — change the stored value only. Critically, we do NOT
-        // include kSecAttrAccess here. Passing an ACL to SecItemUpdate is
-        // treated by macOS as a request to modify the item's access controls,
-        // which is a privileged operation and unconditionally triggers a
-        // "change access permissions" / "change the owner" password prompt
-        // every single time. By updating only the data, the existing ACL
-        // (set on creation) keeps working and the user sees no dialog.
+        // Update path: change the stored value only. The data-protection
+        // keychain doesn't need an ACL to be passed on every save, so this
+        // is a single SecItemUpdate with no extra flags.
         let updateAttribs: [String: Any] = [kSecValueData as String: data]
-        let updateStatus = SecItemUpdate(lookupQuery as CFDictionary, updateAttribs as CFDictionary)
+        let updateStatus = SecItemUpdate(lookup as CFDictionary, updateAttribs as CFDictionary)
 
         if updateStatus == errSecItemNotFound {
-            // ADD PATH — the item doesn't exist yet, so create it. This is
-            // the *only* place we attach an ACL. SecAccessCreate with an
-            // empty trusted-applications array tells macOS "any process
-            // running as the current user may access this item" — so the
-            // keychain doesn't keep challenging us when the app's signature
-            // changes between builds. SecItemAdd on a brand-new item doesn't
-            // prompt: there's no existing ACL to override.
-            var access: SecAccess?
-            SecAccessCreate("HarvestPlus credentials" as CFString, [] as CFArray, &access)
-
-            var addQuery = lookupQuery
-            addQuery[kSecValueData as String] = data
-            if let access { addQuery[kSecAttrAccess as String] = access }
+            // First time creating the item — add it with an accessibility
+            // class that survives reboot once the user logs in, and doesn't
+            // sync to iCloud.
+            var addQuery = lookup
+            addQuery[kSecValueData as String]      = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw KeychainError.saveFailed(addStatus) }
         } else if updateStatus != errSecSuccess {
@@ -64,13 +87,10 @@ enum KeychainHelper {
     // MARK: - Load
 
     static func load(key: String) throws -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String:  true,
-            kSecMatchLimit as String:  kSecMatchLimitOne
-        ]
+        var query = baseQuery
+        query[kSecAttrAccount as String] = key
+        query[kSecReturnData as String]  = true
+        query[kSecMatchLimit as String]  = kSecMatchLimitOne
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -94,11 +114,8 @@ enum KeychainHelper {
     // MARK: - Delete
 
     static func delete(key: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
+        var query = baseQuery
+        query[kSecAttrAccount as String] = key
 
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {

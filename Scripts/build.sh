@@ -60,6 +60,12 @@ BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-com.qampo.HarvestPlus}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-Developer ID Application: Martin Razvan Politic (PA8H58YHD6)}"
 DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-PA8H58YHD6}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-AC_NOTARY}"
+# Developer ID Provisioning Profile registered against com.qampo.HarvestPlus.
+# Required so the embedded `keychain-access-groups` entitlement is honoured
+# (data-protection keychain). xcodebuild looks this up by name in
+# ~/Library/MobileDevice/Provisioning Profiles/ and embeds it inside the
+# .app as Contents/embedded.provisionprofile.
+PROVISIONING_PROFILE_SPECIFIER="${PROVISIONING_PROFILE_SPECIFIER:-HarvestPlus Developer ID}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,8 +135,9 @@ ZIP_FIXED="$BUILD_DIR/${PRODUCT_NAME}.app.zip"
 ZIP_VERSIONED="$BUILD_DIR/${PRODUCT_NAME}-${MARKETING_VERSION}.app.zip"
 
 ok "Building ${PRODUCT_NAME} ${MARKETING_VERSION} (build ${BUILD_NUMBER})"
-log "Signing identity : $CODE_SIGN_IDENTITY"
-log "Notary profile   : $NOTARY_PROFILE"
+log "Signing identity     : $CODE_SIGN_IDENTITY"
+log "Provisioning profile : $PROVISIONING_PROFILE_SPECIFIER"
+log "Notary profile       : $NOTARY_PROFILE"
 
 # ---------------------------------------------------------------------------
 # 1) Archive (Developer ID signed, hardened runtime)
@@ -148,6 +155,7 @@ if ! xcodebuild archive \
         CODE_SIGN_STYLE=Manual \
         CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
         DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+        PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_SPECIFIER" \
         > "$ARCHIVE_LOG" 2>&1; then
     tail -80 "$ARCHIVE_LOG" >&2
     die "xcodebuild archive failed (full log: $ARCHIVE_LOG)"
@@ -161,6 +169,51 @@ ok "Archive → $ARCHIVE_PATH"
 APP_EXPORTED="$ARCHIVE_PATH/Products/Applications/${PRODUCT_NAME}.app"
 [ -d "$APP_EXPORTED" ] || die "Built .app not found at $APP_EXPORTED"
 ok "Built app → $APP_EXPORTED"
+
+# ---------------------------------------------------------------------------
+# 2.5) Re-sign Sparkle's nested binaries with our Developer ID
+# ---------------------------------------------------------------------------
+#
+# Sparkle 2 ships as a precompiled framework via SPM. Its embedded helpers
+# (Updater.app, Autoupdate, Installer.xpc, Downloader.xpc) come pre-signed
+# by the Sparkle project's own identity, which Apple's notary rejects with
+# "not signed with a valid Developer ID certificate". Re-sign each helper
+# from the inside out with our Developer ID, hardened runtime, and a secure
+# timestamp, then re-seal the outer .app.
+#
+# This is required for every release. Without it the build will succeed
+# locally but notarization rejects the archive.
+
+SPARKLE_FW="$APP_EXPORTED/Contents/Frameworks/Sparkle.framework"
+if [ -d "$SPARKLE_FW" ]; then
+    log "Re-signing Sparkle's nested binaries with Developer ID + timestamp…"
+
+    # Order matters: sign each contained binary/bundle before its parent.
+    SPARKLE_TARGETS=(
+        "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+        "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc"
+        "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer"
+        "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc"
+        "$SPARKLE_FW/Versions/B/Updater.app/Contents/MacOS/Updater"
+        "$SPARKLE_FW/Versions/B/Updater.app"
+        "$SPARKLE_FW/Versions/B/Autoupdate"
+        "$SPARKLE_FW"
+    )
+    for target in "${SPARKLE_TARGETS[@]}"; do
+        [ -e "$target" ] || continue
+        codesign --force --timestamp --options runtime \
+            --sign "$CODE_SIGN_IDENTITY" "$target" \
+            >/dev/null 2>&1 || die "Failed to re-sign $target"
+    done
+
+    # Re-sign the outer .app — its embedded framework just changed, so the
+    # original signature is no longer valid. Re-apply our entitlements.
+    codesign --force --timestamp --options runtime \
+        --entitlements "$REPO_ROOT/HarvestPlus/HarvestPlus.entitlements" \
+        --sign "$CODE_SIGN_IDENTITY" "$APP_EXPORTED" \
+        >/dev/null 2>&1 || die "Failed to re-sign HarvestPlus.app after Sparkle re-sign"
+    ok "Sparkle helpers + outer .app re-signed for notarization."
+fi
 
 if ! codesign --verify --deep --strict --verbose=1 "$APP_EXPORTED" >/dev/null 2>&1; then
     die "Built .app failed codesign verification."
@@ -239,6 +292,80 @@ cp "$ZIP_FIXED" "$ZIP_VERSIONED"
 
 ok "Zip → $ZIP_FIXED"
 ok "Zip → $ZIP_VERSIONED"
+
+# ---------------------------------------------------------------------------
+# 6) Sparkle: sign the release zip and (re)write appcast.xml
+# ---------------------------------------------------------------------------
+#
+# Sparkle expects each release zip to carry an EdDSA signature (separate from
+# the Apple Developer ID code signature, layered on top of it). The private
+# half of the keypair lives in the maintainer's login keychain — set up once
+# via `Sparkle/bin/generate_keys`. `sign_update` reads it directly; we never
+# see or pass the key material.
+#
+# The appcast.xml file at the repo root is what Sparkle on every installed
+# client polls. We rewrite it after each build to point at the new release.
+
+# Sparkle ships its CLI tools as part of the SPM artifact bundle. Locate them
+# under DerivedData. Robust to Xcode's hash-suffixed project folder name.
+SPARKLE_BIN="$(find "$HOME/Library/Developer/Xcode/DerivedData" \
+    -type d -path "*/sparkle/Sparkle/bin" 2>/dev/null | head -1)"
+[ -d "$SPARKLE_BIN" ] || die "Couldn't find Sparkle's bin/ in DerivedData. Open the project in Xcode once so SPM caches its artifacts."
+
+log "Signing release zip with Sparkle's EdDSA key…"
+SIGN_OUTPUT="$("$SPARKLE_BIN/sign_update" "$ZIP_FIXED")"
+# sign_update prints a fragment like:
+#   sparkle:edSignature="…" length="…"
+ED_SIG="$(printf '%s' "$SIGN_OUTPUT" | sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/')"
+ZIP_LENGTH="$(printf '%s' "$SIGN_OUTPUT" | sed -E 's/.*length="([^"]+)".*/\1/')"
+[ -n "$ED_SIG" ]    || die "Couldn't extract EdDSA signature from sign_update output: $SIGN_OUTPUT"
+[ -n "$ZIP_LENGTH" ]|| die "Couldn't extract length from sign_update output: $SIGN_OUTPUT"
+
+APPCAST="$REPO_ROOT/appcast.xml"
+PUB_DATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
+RELEASE_URL="https://github.com/mrpolitic/HarvestPlus/releases/download/v${MARKETING_VERSION}/HarvestPlus.app.zip"
+
+# Extract the CHANGELOG section for this version, if present. The appcast
+# carries it inside CDATA so Sparkle's release-notes pane can render it.
+NOTES="$(awk -v ver="$MARKETING_VERSION" '
+    /^## \[/ {
+        if (in_section) { exit }
+        if (index($0, "[" ver "]") > 0) { in_section = 1; next }
+    }
+    in_section { print }
+' "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true)"
+[ -n "$NOTES" ] || NOTES="Release ${MARKETING_VERSION}."
+
+log "Writing appcast.xml → $APPCAST"
+cat > "$APPCAST" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>HarvestPlus</title>
+        <link>https://github.com/mrpolitic/HarvestPlus</link>
+        <description>HarvestPlus update feed.</description>
+        <language>en</language>
+        <item>
+            <title>Version ${MARKETING_VERSION}</title>
+            <pubDate>${PUB_DATE}</pubDate>
+            <description><![CDATA[
+${NOTES}
+            ]]></description>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="${RELEASE_URL}"
+                sparkle:version="${MARKETING_VERSION}"
+                sparkle:shortVersionString="${MARKETING_VERSION}"
+                length="${ZIP_LENGTH}"
+                type="application/octet-stream"
+                sparkle:edSignature="${ED_SIG}" />
+        </item>
+    </channel>
+</rss>
+EOF
+
+ok "Sparkle signature: ${ED_SIG:0:24}… (length ${ZIP_LENGTH})"
+ok "appcast.xml updated. Commit it to main alongside the GitHub release."
 
 # ---------------------------------------------------------------------------
 # Summary

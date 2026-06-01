@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 15/04/2026.
 //
+//  The Yearly dashboard tab: year totals, the month-by-month breakdown, the
+//  year heat-map, and the cumulative-pace chart.
+//
 
 import SwiftUI
 
@@ -82,12 +85,22 @@ struct YearlyDashboardView: View {
         return cal.date(from: DateComponents(year: year, month: month, day: clampedDay))!
     }
 
+    /// Fetch timestamp of the entries in `entries` — used as `polledAt`
+    /// for live extrapolation. See `AppState.fetchedAt(from:to:)`.
+    private var entriesFetchedAt: Date? {
+        appState.fetchedAt(from: yearDates.first, to: yearDates.last)
+    }
+
     private var currentProjects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: entries)
+        DashboardMetrics.projectHours(
+            from: entries,
+            polledAt: entriesFetchedAt,
+            cutoff: appState.settings.reportStartDate
+        )
     }
 
     private var previousProjects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: previousEntries)
+        DashboardMetrics.projectHours(from: previousEntries, polledAt: nil)
     }
 
     var body: some View {
@@ -247,7 +260,7 @@ struct YearlyDashboardView: View {
         return Group {
             MetricCard(
                 title: "Logged",
-                value: formatHoursCompact(totals.actual),
+                value: TimeFormat.clock(totals.actual),
                 icon: "clock.fill",
                 color: AppColor.harvestOrange,
                 deltaPercent: deltaPercent,
@@ -259,7 +272,7 @@ struct YearlyDashboardView: View {
 
             MetricCard(
                 title: "Avg / Month",
-                value: formatHoursCompact(avgPerActiveMonth),
+                value: TimeFormat.clock(avgPerActiveMonth),
                 icon: "chart.bar.fill",
                 color: Color(red: 0.20, green: 0.60, blue: 0.86),
                 tooltip: "Average hours across active months"
@@ -294,7 +307,7 @@ struct YearlyDashboardView: View {
                 id: index,
                 value: month.actual,
                 color: monthBarColor(hasHours: month.actual > 0),
-                tooltip: "\(fullMonthName(index)): \(formatHoursCompact(month.actual))",
+                tooltip: "\(fullMonthName(index)): \(TimeFormat.clock(month.actual))",
                 axisLabel: shortMonthName(index),
                 axisLabelColor: isCurrent ? AppColor.harvestOrange : .secondary,
                 axisLabelBold: isCurrent
@@ -411,7 +424,7 @@ struct YearlyDashboardView: View {
                                     let intensity = maxHours > 0 ? day.actual / maxHours : 0
 
                                     RoundedRectangle(cornerRadius: 2)
-                                        .fill(heatmapColor(intensity: intensity, isNonWorking: day.isNonWorkingDay))
+                                        .fill(DashboardChartColor.heatmap(intensity: intensity, isNonWorking: day.isNonWorkingDay, minWorkedOpacity: 0.15))
                                         .frame(width: 12, height: 12)
                                         .help(heatmapTooltip(day: day))
                                 } else {
@@ -442,8 +455,11 @@ struct YearlyDashboardView: View {
 
     private var highlightsSection: some View {
         let longestStreak = DashboardMetrics.longestWorkingStreak(from: allDaySummaries)
-        let vacDays = DashboardMetrics.vacationDaysTaken(from: allDaySummaries)
-        let holidayHours = DashboardMetrics.holidayHoursTotal(from: allDaySummaries)
+        let timeOffByCategory = DashboardMetrics.holidayDaysByTaskName(
+            entries: entries,
+            schedule: appState.settings.workSchedule,
+            settings: appState.settings
+        )
 
         return HStack(spacing: 12) {
             if longestStreak > 0 {
@@ -459,13 +475,13 @@ struct YearlyDashboardView: View {
                 .harvestSurface(cornerRadius: AppRadius.md)
             }
 
-            if vacDays > 0 || holidayHours > 0 {
+            ForEach(timeOffByCategory) { cat in
                 HighlightRow(
                     icon: "sun.max.fill",
                     iconColor: Color(red: 0.61, green: 0.35, blue: 0.71),
-                    label: "Holiday days",
-                    value: "\(vacDays)",
-                    subtitle: holidayHours > 0 ? formatHoursCompact(holidayHours) + " logged" : nil
+                    label: cat.taskName,
+                    value: TimeFormat.days(cat.days),
+                    subtitle: nil
                 )
                 .padding(AppSpacing.lg - 2)
                 .frame(maxWidth: .infinity)
@@ -473,6 +489,7 @@ struct YearlyDashboardView: View {
             }
         }
     }
+
 
     // MARK: - Month Breakdown
 
@@ -502,7 +519,7 @@ struct YearlyDashboardView: View {
                     }
                     .frame(height: 16)
 
-                    Text(formatHoursCompact(month.actual))
+                    Text(TimeFormat.clock(month.actual))
                         .font(.callout)
                         .fontWeight(.medium)
                         .monospacedDigit()
@@ -547,7 +564,8 @@ struct YearlyDashboardView: View {
                 from: dates.first,
                 to: dates.last,
                 entries: entries,
-                settings: appState.settings
+                settings: appState.settings,
+                polledAt: appState.fetchedAt(from: dates.first, to: dates.last)
             )
             previousDaySummaries = OvertimeCalculator.daySummaries(
                 from: prev.first,
@@ -627,20 +645,11 @@ struct YearlyDashboardView: View {
         return weeks
     }
 
-    private func heatmapColor(intensity: Double, isNonWorking: Bool) -> Color {
-        if isNonWorking && intensity == 0 {
-            return Color(.separatorColor).opacity(0.08)
-        }
-        if intensity == 0 {
-            return Color(.separatorColor).opacity(0.15)
-        }
-        return AppColor.harvestOrange.opacity(max(0.15, min(intensity, 1.0)))
-    }
 
     private func heatmapTooltip(day: DaySummary) -> String {
         let dateStr = yearlyMediumDateFormatter.string(from: day.date)
         if day.isNonWorkingDay && day.actual == 0 { return dateStr }
-        return "\(dateStr) — \(formatHoursCompact(day.actual))"
+        return "\(dateStr) — \(TimeFormat.clock(day.actual))"
     }
 
     // MARK: - Helpers
@@ -664,20 +673,5 @@ struct YearlyDashboardView: View {
 
     private func dayLabel(for date: Date) -> String {
         return yearlyShortWeekdayDateFormatter.string(from: date)
-    }
-
-    private func formatHoursCompact(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        if m == 0 { return "\(h)h" }
-        return String(format: "%d:%02d", h, m)
-    }
-
-    private func formatHoursSigned(_ hours: Double) -> String {
-        let sign = hours >= 0 ? "+" : "-"
-        let abs = abs(hours)
-        let h = Int(abs)
-        let m = Int((abs - Double(h)) * 60)
-        return String(format: "%@%dh %02dm", sign, h, m)
     }
 }

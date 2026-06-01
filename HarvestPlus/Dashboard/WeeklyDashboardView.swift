@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 15/04/2026.
 //
+//  The Weekly dashboard tab: week totals vs. target, the per-day bar chart,
+//  and the week's time entries.
+//
 
 import SwiftUI
 
@@ -76,11 +79,19 @@ struct WeeklyDashboardView: View {
         weekOffset == 0
     }
 
+    /// Fetch timestamp of the entries currently in `entries`. Used as
+    /// `polledAt` for live-elapsed extrapolation. See
+    /// `AppState.fetchedAt(from:to:)`.
+    private var entriesFetchedAt: Date? {
+        appState.fetchedAt(from: weekDates.monday, to: weekDates.sunday)
+    }
+
     private var weekSummary: WeekSummary {
         OvertimeCalculator.weekSummary(
             containing: weekDates.monday,
             entries: entries,
-            settings: appState.settings
+            settings: appState.settings,
+            polledAt: entriesFetchedAt
         )
     }
 
@@ -89,15 +100,20 @@ struct WeeklyDashboardView: View {
             containing: previousWeekDates.monday,
             entries: previousEntries,
             settings: appState.settings
+            // Previous week is always historical — no polledAt needed.
         )
     }
 
     private var currentProjects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: entries)
+        DashboardMetrics.projectHours(
+            from: entries,
+            polledAt: entriesFetchedAt,
+            cutoff: appState.settings.reportStartDate
+        )
     }
 
     private var previousProjects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: previousEntries)
+        DashboardMetrics.projectHours(from: previousEntries, polledAt: nil)
     }
 
     var body: some View {
@@ -241,7 +257,7 @@ struct WeeklyDashboardView: View {
         return Group {
             MetricCard(
                 title: "Logged",
-                value: formatHoursCompact(ws.actualTotal),
+                value: TimeFormat.clock(ws.actualTotal),
                 icon: "clock.fill",
                 color: AppColor.harvestOrange,
                 deltaPercent: deltaPercent,
@@ -253,7 +269,7 @@ struct WeeklyDashboardView: View {
 
             MetricCard(
                 title: "Avg / Day",
-                value: formatHoursCompact(avgPerDay),
+                value: TimeFormat.clock(avgPerDay),
                 icon: "chart.bar.fill",
                 color: Color(red: 0.20, green: 0.60, blue: 0.86),
                 tooltip: "Average hours across days worked"
@@ -291,7 +307,7 @@ struct WeeklyDashboardView: View {
                 id: index,
                 value: day.actual,
                 color: barColor(for: day),
-                tooltip: "\(fullDayName(index)): \(formatHoursCompact(day.actual))",
+                tooltip: "\(fullDayName(index)): \(TimeFormat.clock(day.actual))",
                 axisLabel: shortDayName(index),
                 axisLabelColor: today ? AppColor.harvestOrange : .secondary,
                 axisLabelBold: today
@@ -327,7 +343,12 @@ struct WeeklyDashboardView: View {
     }
 
     private func barColor(for day: DaySummary) -> Color {
-        if day.actual == 0 && day.isNonWorkingDay {
+        // Always gray non-working days (weekend or public holiday) so
+        // the user immediately sees "I wasn't expected to register time
+        // here." Even if hours were logged on that day (a Saturday push
+        // or a holiday-task correction), the gray fill signals the
+        // schedule context — the tooltip still shows the actual hours.
+        if day.isNonWorkingDay {
             return Color(.separatorColor).opacity(0.3)
         }
         return AppColor.harvestOrange.opacity(day.actual > 0 ? 0.55 : 0.15)
@@ -352,25 +373,48 @@ struct WeeklyDashboardView: View {
         .harvestSurface(cornerRadius: AppRadius.md)
     }
 
-    // MARK: - Highlights Section (Lightest day)
+    // MARK: - Highlights Section (Lightest day · Time off categories)
 
     private var highlightsSection: some View {
         let days = weekSummary.days
         let lightest = DashboardMetrics.fewestHoursDay(from: days)
+        let timeOffByCategory = DashboardMetrics.holidayDaysByTaskName(
+            entries: entries,
+            schedule: appState.settings.workSchedule,
+            settings: appState.settings
+        )
+        let hasContent = lightest != nil || !timeOffByCategory.isEmpty
 
         return Group {
-            if let lightest = lightest {
+            if hasContent {
                 HStack(spacing: 12) {
-                    HighlightRow(
-                        icon: "leaf.fill",
-                        iconColor: AppColor.harvestGreen,
-                        label: "Lightest day",
-                        value: formatHoursCompact(lightest.actual),
-                        subtitle: dayLabel(for: lightest.date)
-                    )
-                    .padding(AppSpacing.lg - 2)
-                    .frame(maxWidth: .infinity)
-                    .harvestSurface(cornerRadius: AppRadius.md)
+                    if let lightest = lightest {
+                        HighlightRow(
+                            icon: "leaf.fill",
+                            iconColor: AppColor.harvestGreen,
+                            label: "Lightest day",
+                            value: TimeFormat.clock(lightest.actual),
+                            subtitle: dayLabel(for: lightest.date)
+                        )
+                        .padding(AppSpacing.lg - 2)
+                        .frame(maxWidth: .infinity)
+                        .harvestSurface(cornerRadius: AppRadius.md)
+                    }
+
+                    // One tile per holiday-task category (e.g. "Holiday",
+                    // "Feriefridag", etc.). Hidden when zero in this period.
+                    ForEach(timeOffByCategory) { cat in
+                        HighlightRow(
+                            icon: "calendar.badge.minus",
+                            iconColor: AppColor.meetingBlue,
+                            label: cat.taskName,
+                            value: TimeFormat.days(cat.days),
+                            subtitle: "this week"
+                        )
+                        .padding(AppSpacing.lg - 2)
+                        .frame(maxWidth: .infinity)
+                        .harvestSurface(cornerRadius: AppRadius.md)
+                    }
                 }
             }
         }
@@ -413,7 +457,7 @@ struct WeeklyDashboardView: View {
                     .frame(height: 14)
 
                     // Hours
-                    Text(formatHoursCompact(day.actual))
+                    Text(TimeFormat.clock(day.actual))
                         .font(.callout)
                         .fontWeight(.medium)
                         .monospacedDigit()
@@ -495,12 +539,5 @@ struct WeeklyDashboardView: View {
 
     private func formatDateShort(_ date: Date) -> String {
         return weeklyShortDateFormatter.string(from: date)
-    }
-
-    private func formatHoursCompact(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        if m == 0 { return "\(h)h" }
-        return String(format: "%d:%02d", h, m)
     }
 }

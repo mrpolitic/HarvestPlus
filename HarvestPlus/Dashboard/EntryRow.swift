@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  One row in a list of Harvest time entries: project color dot, project /
+//  task, notes, and hours. Reused across the dashboard tabs.
+//
 
 import SwiftUI
 
@@ -65,7 +68,7 @@ struct EntryRow: View {
                         .frame(width: 6, height: 6)
                 }
 
-                Text(formatDuration(entry.hours))
+                Text(TimeFormat.clockExact(entry.hours))
                     .font(.callout)
                     .fontWeight(.medium)
                     .monospacedDigit()
@@ -77,8 +80,8 @@ struct EntryRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 entry.isRunning
-                    ? "Running: \(formatDuration(entry.hours))"
-                    : formatDuration(entry.hours)
+                    ? "Running: \(TimeFormat.clockExact(entry.hours))"
+                    : TimeFormat.clockExact(entry.hours)
             )
         }
         .padding(.vertical, 4)
@@ -90,11 +93,6 @@ struct EntryRow: View {
         ProjectPalette.color(for: entry.project.id)
     }
 
-    private func formatDuration(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        return String(format: "%d:%02d", h, m)
-    }
 
     private func timeRange(started: Date) -> String {
         let startStr = entryRowTimeFormatter.string(from: started)

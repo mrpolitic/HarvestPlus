@@ -6,7 +6,7 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 
-	<!-- Outgoing network — Harvest API + GitHub update checks -->
+	<!-- Outgoing network — Harvest API + Sparkle update checks -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 
@@ -18,11 +18,28 @@
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 
-	<!-- Apple Events → Terminal — used by "Install Update" to open Terminal
-	     and run the install script without writing a file to disk.
-	     macOS shows a one-time consent dialog: "HarvestPlus wants to control
-	     Terminal." After the user clicks OK it is never asked again. -->
-	<key>com.apple.security.automation.apple-events</key>
-	<true/>
+	<!-- Keychain access group for the modern data-protection keychain.
+	     The team-id prefix (PA8H58YHD6.) is substituted by Xcode at
+	     build time via $(AppIdentifierPrefix). Every binary signed with
+	     this team ID + this entitlement reads the same items, regardless
+	     of which code signature wrote them — Debug, Release, ad-hoc, all
+	     equivalent. This is what eliminates the "wants to use your
+	     confidential information" prompt on every build switch.
+
+	     Requires a Developer ID Provisioning Profile registered against
+	     the app's bundle ID; see RELEASING.md. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.qampo.HarvestPlus</string>
+	</array>
+
+	<!-- Sparkle's InstallerLauncher XPC service. Required so the sandboxed
+	     app can look up the out-of-process installer that performs the
+	     bundle swap on update. The XPC service is bundled inside
+	     Sparkle.framework and is signed + notarised together with the app. -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>org.sparkle-project.InstallerLauncher</string>
+	</array>
 </dict>
 </plist>

@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Holidays settings: enable / disable public holidays per year, the holiday
+//  task names used to recognize holiday entries, custom non-working dates,
+//  and an optional ICS URL.
+//
 
 import SwiftUI
 

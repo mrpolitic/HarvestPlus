@@ -77,6 +77,17 @@ struct DashboardInsight: Identifiable {
     let accent: Color
 }
 
+/// Day-only formatter for parsing `entry.spentDate`'s "yyyy-MM-dd" form
+/// when filtering by the report-start-date cutoff. Hoisted to file scope
+/// so it isn't re-allocated per entry in tight loops.
+private let projectHoursDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = .current
+    return f
+}()
+
 // MARK: - Dashboard Metrics
 
 struct DashboardMetrics {
@@ -84,15 +95,28 @@ struct DashboardMetrics {
     // MARK: - Project Aggregation
 
     /// Aggregate entries by project, including running-timer elapsed time.
-    /// Sorted high-to-low by hours.
-    static func projectHours(from entries: [TimeEntry]) -> [ProjectSummary] {
+    /// Sorted high-to-low by hours. Live elapsed is extrapolated from
+    /// `polledAt` (see TimeEntry.liveHours). Pass `nil` for historical
+    /// periods where no running timer can exist.
+    ///
+    /// If `cutoff` is set, entries dated strictly before that day are
+    /// excluded — same semantics as `OvertimeCalculator`'s reportStartDate
+    /// handling.
+    static func projectHours(
+        from entries: [TimeEntry],
+        polledAt: Date? = nil,
+        cutoff: Date? = nil
+    ) -> [ProjectSummary] {
         var grouped: [Int: (name: String, hours: Double)] = [:]
         let now = Date()
+        let cutoffDay = cutoff.map { Calendar.current.startOfDay(for: $0) }
         for entry in entries {
-            var hours = entry.hours
-            if entry.isRunning, let started = entry.timerStartedAt {
-                hours += now.timeIntervalSince(started) / 3600.0
+            if let cutoffDay,
+               let entryDate = projectHoursDateFormatter.date(from: entry.spentDate),
+               Calendar.current.startOfDay(for: entryDate) < cutoffDay {
+                continue
             }
+            let hours = entry.liveHours(now: now, polledAt: polledAt)
             // `default:` seeds with (name, 0) on first sight and we add in place —
             // one hash lookup per entry instead of two (previous `!= nil` check
             // + force-unwrap write).
@@ -194,7 +218,9 @@ struct DashboardMetrics {
 
     /// Total duration of meetings (in hours) that fall on the given day.
     static func meetingHours(meetings: [CalendarEvent]) -> Double {
-        meetings.reduce(0) { $0 + Double($1.durationMinutes) / 60.0 }
+        // Clamp each event at 0 — a malformed calendar event with end < start would
+        // otherwise contribute negative hours to the meeting-load math.
+        meetings.reduce(0) { $0 + max(0, Double($1.durationMinutes)) / 60.0 }
     }
 
     /// Percent of logged hours represented by meetings. `nil` if no hours logged.
@@ -237,9 +263,42 @@ struct DashboardMetrics {
         days.filter { $0.holidayHours > 0 }.count
     }
 
-    /// Total hours logged under holiday tasks over the range.
-    static func holidayHoursTotal(from days: [DaySummary]) -> Double {
-        days.reduce(0) { $0 + $1.holidayHours }
+    /// Time off taken over the range, expressed in **days** with decimals
+    /// (each spent-date's per-day target as the unit — a 7.5h holiday entry
+    /// on a 7.5h-target day = 1.0 days), broken down per holiday task name
+    /// (e.g., "Holiday" vs. "Holiday (feriefridag)" — and any other names
+    /// the user has configured in `holidayTaskNames`). Used by the
+    /// dashboards to show one tile per type instead of an aggregated
+    /// "Time off" row.
+    ///
+    /// Each entry is converted to a fractional day against its own
+    /// spent-date's target. Entries whose date has no expected hours
+    /// (weekend / public holiday) contribute zero. Returns the list
+    /// sorted by days descending so the biggest bucket is rendered first.
+    struct HolidayCategoryDays: Identifiable {
+        let taskName: String
+        let days: Double
+        var id: String { taskName }
+    }
+
+    static func holidayDaysByTaskName(
+        entries: [TimeEntry],
+        schedule: WorkSchedule,
+        settings: AppSettings
+    ) -> [HolidayCategoryDays] {
+        // Parse the spentDate strings once; reusing the file-level
+        // `projectHoursDateFormatter` already declared above.
+        var byTask: [String: Double] = [:]
+        for entry in entries {
+            guard HolidayEngine.isHolidayTask(taskName: entry.task.name, settings: settings) else { continue }
+            guard let date = projectHoursDateFormatter.date(from: entry.spentDate) else { continue }
+            let target = schedule.dailyTarget(for: date)
+            guard target > 0 else { continue }
+            byTask[entry.task.name, default: 0] += entry.hours / target
+        }
+        return byTask
+            .map { HolidayCategoryDays(taskName: $0.key, days: $0.value) }
+            .sorted { $0.days > $1.days }
     }
 
     // MARK: - Sparkline Data
@@ -260,6 +319,7 @@ struct DashboardMetrics {
         previousEntries: [TimeEntry]?,
         meetings: [CalendarEvent]?,
         periodLabel: String,
+        polledAt: Date? = nil,
         limit: Int = 4
     ) -> [DashboardInsight] {
         var insights: [DashboardInsight] = []
@@ -292,7 +352,7 @@ struct DashboardMetrics {
 
         // 2. Project trend — largest mover
         if let prevEntries = previousEntries {
-            let curProjects = projectHours(from: entries)
+            let curProjects = projectHours(from: entries, polledAt: polledAt)
             let prevProjects = projectHours(from: prevEntries)
             let trends = projectTrends(current: curProjects, previous: prevProjects)
 
@@ -315,7 +375,7 @@ struct DashboardMetrics {
             } else if let newProject = trends.first(where: { $0.direction == .new }) {
                 insights.append(DashboardInsight(
                     icon: "sparkles",
-                    text: "New this period: \(newProject.name) (\(formatHours(newProject.currentHours)))",
+                    text: "New this period: \(newProject.name) (\(TimeFormat.clock(newProject.currentHours)))",
                     accent: AppColor.harvestOrange
                 ))
             }
@@ -370,20 +430,12 @@ struct DashboardMetrics {
         return Array(insights.prefix(limit))
     }
 
-    // MARK: - Formatting Helpers
-
-    private static func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        if m == 0 { return "\(h)h" }
-        return String(format: "%d:%02d", h, m)
-    }
 }
 
 // MARK: - Deterministic Project Colors
 
 /// Shared color palette for project rendering across dashboards.
-/// Color is selected by `abs(projectId) % colors.count` so a project keeps the same color
+/// Color is selected by `abs(projectId % colors.count)` so a project keeps the same color
 /// regardless of ordering or view.
 enum ProjectPalette {
     static let colors: [Color] = [
@@ -398,6 +450,9 @@ enum ProjectPalette {
     ]
 
     static func color(for projectId: Int) -> Color {
-        colors[abs(projectId) % colors.count]
+        // `abs(projectId % count)`, not `abs(projectId) % count`: a project id of
+        // Int.min would overflow-trap inside abs(). Harvest ids are positive, but
+        // this keeps a stray negative/sentinel id from crashing the dashboards.
+        colors[abs(projectId % colors.count)]
     }
 }

@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Owns the floating nudge banner: decides when to show it (date-based
+//  snooze / skip-for-today muting), drives the self-rescheduling nudge
+//  timer off the timer-state stream, and shows / hides the BannerPanel.
+//
 
 import AppKit
 import SwiftUI
@@ -18,10 +22,63 @@ final class BannerManager: ObservableObject {
     private var panel: BannerPanel?
     private weak var appState: AppState?
     private var cancellables = Set<AnyCancellable>()
-    private var snoozeTimer: Timer?
     private var nudgeDelayTimer: Timer?
-    private var isSnoozed: Bool = false
-    private var isDismissed: Bool = false
+
+    // MARK: - Date-based muting
+    //
+    // Previously we tracked snoozing with an `isSnoozed: Bool` and a 15-min
+    // Timer that flipped it back. Two real bugs lived in that design:
+    //   1) The `.running` branch reset `isSnoozed` to false, so a brief
+    //      running→stopped transition during the snooze period broke it.
+    //      That's why the banner reappeared roughly 30s after clicking
+    //      Snooze: the 60s poll re-emitted `.running` (or just .stopped
+    //      again) and the nudge-delay timer rearmed.
+    //   2) Stuck states: if the snooze Timer never fired (e.g. the system
+    //      was asleep through the 15 min, or two Snooze clicks left a
+    //      dangling Timer reference), `isSnoozed` could remain true
+    //      indefinitely — which is why "after a few skips it doesn't
+    //      appear anymore" happened.
+    //
+    // The fix is to drop both timers and the boolean, and represent each
+    // mute as an absolute Date in the future. Date-based muting can't
+    // drift out of sync with reality — it naturally expires when wall-
+    // clock passes the stored timestamp, no Timer to mis-fire or leak.
+    // Both values persist in UserDefaults so a 15-min snooze or a "skip
+    // for today" survives quit/relaunch.
+
+    private static let snoozedUntilKey = "bannerSnoozedUntil"
+    private static let skippedUntilKey = "bannerSkippedUntil"
+
+    private var snoozedUntil: Date? {
+        get { UserDefaults.standard.object(forKey: Self.snoozedUntilKey) as? Date }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: Self.snoozedUntilKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.snoozedUntilKey)
+            }
+        }
+    }
+
+    private var skippedUntil: Date? {
+        get { UserDefaults.standard.object(forKey: Self.skippedUntilKey) as? Date }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: Self.skippedUntilKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.skippedUntilKey)
+            }
+        }
+    }
+
+    /// True if any active mute (snooze or skip-for-today) is still in
+    /// effect. Replaces the old `isSnoozed` boolean everywhere.
+    private var isMuted: Bool {
+        let now = Date()
+        if let s = snoozedUntil, now < s { return true }
+        if let s = skippedUntil, now < s { return true }
+        return false
+    }
 
     init(appState: AppState) {
         self.appState = appState
@@ -34,6 +91,13 @@ final class BannerManager: ObservableObject {
         guard let appState = appState else { return }
 
         appState.$timerState
+            // CRITICAL: `@Published` re-emits on every assignment, and
+            // TimerMonitor re-assigns `timerState` on every poll (e.g. every
+            // 15s). Without dedup, each poll re-entered handleTimerStateChange
+            // and reset the 30s nudge delay timer, so with a poll interval
+            // ≤ 30s the nudge could never fire. removeDuplicates() (TimerState
+            // is Equatable) makes us react only to genuine state transitions.
+            .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
                 self?.handleTimerStateChange(state)
@@ -44,38 +108,80 @@ final class BannerManager: ObservableObject {
     private func handleTimerStateChange(_ state: TimerState) {
         switch state {
         case .running:
-            // Timer started — cancel any pending nudge, hide banner
+            // Timer started — cancel any pending nudge and hide the banner.
+            // DO NOT clear snoozedUntil / skippedUntil: those are explicit
+            // absolute time windows the user chose, and a brief
+            // running→stopped transition (or a polling re-emit of `.running`)
+            // shouldn't break them.
             nudgeDelayTimer?.invalidate()
             nudgeDelayTimer = nil
             hideBanner()
-            isDismissed = false
-            isSnoozed = false
 
         case .stopped:
-            // Cancel any existing pending nudge
-            nudgeDelayTimer?.invalidate()
-            nudgeDelayTimer = nil
-
-            // Wait 30 seconds before showing nudge — gives the user time to start a new timer
-            nudgeDelayTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self = self, let appState = self.appState else { return }
-                    // Re-check all conditions after the delay
-                    if appState.timerState == .stopped
-                        && appState.settings.workSchedule.isWorkingHours(at: Date())
-                        && appState.settings.timerNudgeEnabled
-                        && !self.isSnoozed
-                        && !self.isDismissed {
-                        self.showBanner(mode: .nudge)
-                    }
-                }
-            }
+            // Arm the nudge with the standard 30s grace period — enough time
+            // for the user to start a new timer before we prompt.
+            scheduleNudge(after: 30)
 
         case .offline:
             nudgeDelayTimer?.invalidate()
             nudgeDelayTimer = nil
             hideBanner()
         }
+    }
+
+    // MARK: - Nudge scheduling
+    //
+    // The nudge should appear once all of these hold continuously: timer
+    // stopped, within work hours, nudge enabled, and not muted (snooze /
+    // skip-for-today). We model that with a single pending timer that, when
+    // it fires, either shows the banner or — if a *temporary* condition is
+    // blocking (an active snooze/skip, or we're outside work hours) —
+    // reschedules itself to re-check when that condition is likely to have
+    // lifted. This keeps the nudge reliable regardless of the poll interval
+    // and without depending on `@Published` re-emissions.
+
+    private func scheduleNudge(after delay: TimeInterval) {
+        nudgeDelayTimer?.invalidate()
+        nudgeDelayTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.evaluateNudge()
+            }
+        }
+    }
+
+    private func evaluateNudge() {
+        guard let appState = appState else { return }
+
+        // Only relevant while the timer is stopped.
+        guard appState.timerState == .stopped else { return }
+
+        // Temporarily muted (snooze / skip-for-today): re-check just after
+        // the mute is due to lift rather than dropping the nudge entirely.
+        if let until = activeMuteExpiry {
+            scheduleNudge(after: max(1, until.timeIntervalSinceNow) + 1)
+            return
+        }
+
+        guard appState.settings.timerNudgeEnabled else { return }
+
+        // Outside configured work hours: don't nag, but keep checking on a
+        // low frequency so we catch the start of the next work window.
+        guard appState.settings.workSchedule.isWorkingHours(at: Date()) else {
+            scheduleNudge(after: 300)  // 5 min
+            return
+        }
+
+        showBanner(mode: .nudge)
+    }
+
+    /// The latest still-in-the-future mute expiry (snooze or skip), or nil
+    /// if nothing is currently muting the nudge.
+    private var activeMuteExpiry: Date? {
+        let now = Date()
+        return [snoozedUntil, skippedUntil]
+            .compactMap { $0 }
+            .filter { $0 > now }
+            .max()
     }
 
     // MARK: - Show / Hide
@@ -92,8 +198,8 @@ final class BannerManager: ObservableObject {
             onSnooze: { [weak self] in
                 self?.snooze()
             },
-            onDismiss: { [weak self] in
-                self?.dismiss()
+            onSkipForToday: { [weak self] in
+                self?.skipForToday()
             },
             onStopTimer: { [weak self] in
                 Task {
@@ -113,6 +219,13 @@ final class BannerManager: ObservableObject {
             onOpenHarvest: { [weak self] in
                 PopoverView.openHarvestApp()
                 self?.hideBanner()
+                // Re-arm in 3 minutes so a user who opens Harvest and gets
+                // distracted (never actually starts a timer) gets prompted again
+                // rather than silently going un-tracked for the rest of the day.
+                // If they DO start a timer in the meantime, the `.running`
+                // transition in handleTimerStateChange cancels this pending
+                // nudge before it fires.
+                self?.scheduleNudge(after: 180)
             }
         )
 
@@ -186,30 +299,27 @@ final class BannerManager: ObservableObject {
         })
     }
 
-    // MARK: - Snooze / Dismiss
+    // MARK: - Snooze / Skip
 
     private func snooze() {
-        isSnoozed = true
+        let duration = appState?.settings.snoozeDuration ?? 15 * 60
+        snoozedUntil = Date().addingTimeInterval(duration)
         hideBanner()
-
-        let snoozeDuration = appState?.settings.snoozeDuration ?? 15 * 60
-
-        snoozeTimer?.invalidate()
-        snoozeTimer = Timer.scheduledTimer(withTimeInterval: snoozeDuration, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.isSnoozed = false
-                // Re-check if banner should show
-                if let state = self?.appState?.timerState {
-                    self?.handleTimerStateChange(state)
-                }
-            }
-        }
+        // Re-arm so the nudge reappears once the snooze lifts (evaluateNudge
+        // sees the active mute and reschedules itself for the expiry).
+        scheduleNudge(after: 1)
     }
 
-    private func dismiss() {
-        isDismissed = true
+    /// Suppress the banner for the rest of today. "Today" ends at 00:00
+    /// local time, so this is essentially "leave me alone until tomorrow".
+    private func skipForToday() {
+        let cal = Calendar.current
+        let startOfToday = cal.startOfDay(for: Date())
+        if let startOfTomorrow = cal.date(byAdding: .day, value: 1, to: startOfToday) {
+            skippedUntil = startOfTomorrow
+        }
         hideBanner()
-        // isDismissed resets on next timer start (see handleTimerStateChange)
+        scheduleNudge(after: 1)
     }
 
     // MARK: - Sizing
@@ -220,7 +330,7 @@ final class BannerManager: ObservableObject {
         let screenCap = (NSScreen.main?.frame.width ?? 1200) * 0.9
         let desired: CGFloat
         switch mode {
-        case .nudge:           desired = 360   // narrow → grows tall, feels square-ish
+        case .nudge:           desired = 420   // narrow → grows tall, feels square-ish (3-button footer)
         case .idle:            desired = 580   // 3 action buttons
         case .longTimer:       desired = 500   // 2 action buttons
         case .eodSummary,
@@ -230,7 +340,6 @@ final class BannerManager: ObservableObject {
     }
 
     deinit {
-        snoozeTimer?.invalidate()
         nudgeDelayTimer?.invalidate()
     }
 }

@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The menu-bar status item icon. Renders the hourglass+plus glyph filled in
+//  harvestOrange while a timer is running, and as a tintable template image
+//  (matching the menu-bar foreground) when stopped or offline.
+//
 
 import SwiftUI
 import AppKit
@@ -30,13 +34,30 @@ struct MenuBarIconView: View {
     /// already lives in the banner, and a second indicator in the menu bar
     /// was redundant.
     private func compositeIcon() -> NSImage {
-        let size = NSSize(width: 22, height: 22)
-        let imageRect = NSRect(x: 2, y: 2, width: 18, height: 18)
+        // Glyph is fit to the standard ~18pt menu-bar height; its width
+        // follows the source aspect ratio rather than being forced square.
+        // The hourglass+plus mark is wider than it is tall (≈4:3), so a
+        // fixed square rect would squish it. Reading the aspect from the
+        // base image keeps this correct for whatever shape is in the
+        // MenuBarIcon imageset. 2pt of breathing room around the glyph.
+        // 15pt tall (not the full ~18pt menu-bar height) so the mark has a
+        // little breathing room — 18pt filled the bar edge-to-edge and read
+        // as too large next to system glyphs. Centered in a 22pt canvas with
+        // matching horizontal padding so the margin is even on all sides.
+        let glyphHeight: CGFloat = 15
+        let baseImage = NSImage(named: "MenuBarIcon")
+        let aspect = (baseImage?.size.width ?? 1) / max(baseImage?.size.height ?? 1, 1)
+        let glyphWidth = (glyphHeight * aspect).rounded()
+        let canvasHeight: CGFloat = 22
+        let hPad: CGFloat = 3
+        let canvasSize = NSSize(width: glyphWidth + hPad * 2, height: canvasHeight)
+        let yOffset = ((canvasHeight - glyphHeight) / 2).rounded()
+        let imageRect = NSRect(x: hPad, y: yOffset, width: glyphWidth, height: glyphHeight)
 
         switch state {
         case .running:
             // Fully tinted; non-template so macOS preserves the orange.
-            let image = NSImage(size: size, flipped: false) { _ in
+            let image = NSImage(size: canvasSize, flipped: false) { _ in
                 guard let baseImage = NSImage(named: "MenuBarIcon") else { return true }
                 baseImage.draw(in: imageRect)
                 (NSColor(named: "harvestOrange") ?? .systemOrange).set()
@@ -48,7 +69,7 @@ struct MenuBarIconView: View {
 
         case .stopped, .offline:
             // Template — macOS handles the menu bar tint for us.
-            let image = NSImage(size: size, flipped: false) { _ in
+            let image = NSImage(size: canvasSize, flipped: false) { _ in
                 NSImage(named: "MenuBarIcon")?.draw(in: imageRect)
                 return true
             }

@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  App entry point (`@main`). Declares the menu-bar extra, the Dashboard and
+//  Log-Meeting windows, and the Settings scene, and injects the shared
+//  `AppState` into each.
+//
 
 import SwiftUI
 

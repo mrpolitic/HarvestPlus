@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The borderless, non-activating floating NSPanel that hosts the banner's
+//  SwiftUI content above all other windows without stealing focus.
+//
 
 import AppKit
 

@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The Settings window shell: a TabView hosting the General, Schedule,
+//  Notifications, Integrations, Holidays, Export, and Feedback tabs.
+//
 
 import SwiftUI
 
@@ -48,6 +51,12 @@ struct SettingsView: View {
                 .environmentObject(appState)
                 .tabItem {
                     Label("Export", systemImage: "square.and.arrow.up")
+                }
+
+            FeedbackSettingsTab()
+                .environmentObject(appState)
+                .tabItem {
+                    Label("Feedback", systemImage: "bubble.left.and.bubble.right")
                 }
         }
         .frame(width: 550, height: 500)

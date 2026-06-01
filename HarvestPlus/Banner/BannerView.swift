@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The banner's SwiftUI content and its modes (nudge / idle / long-timer /
+//  end-of-day / end-of-week summary), plus the `BannerActions` callbacks
+//  each mode wires up.
+//
 
 import SwiftUI
 
@@ -21,7 +25,7 @@ enum BannerMode {
 
 struct BannerActions {
     var onSnooze: () -> Void = {}
-    var onDismiss: () -> Void = {}
+    var onSkipForToday: () -> Void = {}
     var onStopTimer: () -> Void = {}
     var onStopAndSubtractIdle: () -> Void = {}
     var onKeepGoing: () -> Void = {}
@@ -35,7 +39,7 @@ struct BannerActions {
 //   │  Mode-specific body        │  ← header + actions
 //   │                            │
 //   ├────────────────────────────┤
-//   │  Snooze 15m      Dismiss   │  ← always-present footer
+//   │  Snooze 15m   Skip today   │  ← always-present footer
 //   └────────────────────────────┘
 //
 // The footer holds the persistent "get this banner out of my face" controls;
@@ -257,7 +261,12 @@ struct BannerView: View {
     // MARK: - Footer (always present)
 
     private var footer: some View {
-        HStack(spacing: 14) {
+        // Two "come back later" actions pinned to opposite corners: a short
+        // snooze on the left, skip-for-today on the right. Both have a
+        // defined duration and are guaranteed to reappear, so the nudge can
+        // never be silenced for an open-ended stretch (the reason the old
+        // "Dismiss" button was removed).
+        HStack(spacing: 10) {
             Button(action: actions.onSnooze) {
                 Label("Snooze \(snoozeDurationMinutes) min", systemImage: "clock.badge.xmark")
             }
@@ -265,8 +274,8 @@ struct BannerView: View {
 
             Spacer()
 
-            Button(action: actions.onDismiss) {
-                Label("Dismiss", systemImage: "xmark")
+            Button(action: actions.onSkipForToday) {
+                Label("Skip for today", systemImage: "calendar.badge.minus")
             }
             .buttonStyle(BannerFooterButtonStyle())
         }
@@ -275,16 +284,13 @@ struct BannerView: View {
     // MARK: - Formatting
 
     private func formatSummaryHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         return String(format: "%d:%02d", h, m)
     }
 
     private func formatSummaryDelta(_ hours: Double) -> String {
         let sign = hours >= 0 ? "+" : "-"
-        let abs = abs(hours)
-        let h = Int(abs)
-        let m = Int((abs - Double(h)) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         return String(format: "%@%d:%02d", sign, h, m)
     }
 }
@@ -345,8 +351,8 @@ struct BannerSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Footer controls (Snooze / Dismiss). Ghost text-link style — they're always
-/// available but never the thing the user came here to click.
+/// Footer controls (Snooze / Skip for today). Ghost text-link style — they're
+/// always available but never the thing the user came here to click.
 struct BannerFooterButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         FooterLabel(label: configuration.label, isPressed: configuration.isPressed)

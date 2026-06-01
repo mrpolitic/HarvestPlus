@@ -145,8 +145,14 @@ fi
 
 if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
     blue "Quitting running ${APP_NAME} so the new version can replace it…"
-    osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 || \
-        killall "$APP_NAME" 2>/dev/null || true
+    # Use killall directly rather than `osascript "tell ... to quit"`.
+    # osascript would send an Apple Event to HarvestPlus, which on first
+    # use triggers a "Terminal wants to control HarvestPlus" consent
+    # dialog — not a password prompt, but still avoidable friction.
+    # `killall` on a process the current user owns needs no permission
+    # and produces no dialog. HarvestPlus has no unsaved state, so the
+    # hard kill is safe.
+    killall "$APP_NAME" 2>/dev/null || true
     # Give the process a moment to release the bundle lock.
     for _ in 1 2 3 4 5; do
         pgrep -x "$APP_NAME" >/dev/null 2>&1 || break

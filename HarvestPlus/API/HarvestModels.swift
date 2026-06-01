@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Codable models mirroring the Harvest API JSON (TimeEntry, project/task/
+//  user references, response envelopes), plus display helpers such as
+//  `displayProjectName`, which strips the leading `[code]` billing prefix.
+//
 
 import Foundation
 
@@ -36,10 +40,22 @@ struct TimeEntry: Codable, Identifiable, Equatable, Sendable {
         lhs.id == rhs.id
     }
 
-    /// Project name with bracket codes stripped for display.
+    /// Project name with the leading `[code]` prefix stripped for display
+    /// (e.g., `[000025] Web App` → `Web App`). Respects the user's
+    /// `stripProjectPrefixCodes` toggle — when off, returns the raw name.
+    ///
+    /// The setting lives in UserDefaults; we read it directly here so the
+    /// computed property has zero callers to update. Anchoring the regex
+    /// at the start of the string means an in-name `[v2]` is left alone,
+    /// only the leading code prefix is stripped — matters for names like
+    /// "Web App [v2] Redesign".
     var displayProjectName: String {
-        project.name.replacingOccurrences(
-            of: "\\[\\d+\\]\\s*",
+        let strip = UserDefaults.standard.object(forKey: "stripProjectPrefixCodes") as? Bool ?? true
+        guard strip else {
+            return project.name.trimmingCharacters(in: .whitespaces)
+        }
+        return project.name.replacingOccurrences(
+            of: "^\\s*\\[[\\w-]+\\]\\s*",
             with: "",
             options: .regularExpression
         ).trimmingCharacters(in: .whitespaces)
@@ -54,6 +70,27 @@ struct TimeEntry: Codable, Identifiable, Equatable, Sendable {
             return taskName
         }
         return combined
+    }
+
+    /// Live total hours for this entry as of `now`, given when the entry's
+    /// `hours` value was last polled from Harvest.
+    ///
+    /// For a non-running entry, returns `hours` unchanged.
+    ///
+    /// For a running entry, Harvest's API returns `hours` as the **live
+    /// total at poll time**, not "saved hours without the current session".
+    /// So the correct extrapolation between polls is `hours + (now -
+    /// polledAt)`, NOT `hours + (now - timer_started_at)` — the latter
+    /// double-counts the time from `timer_started_at` to `polledAt`, which
+    /// was the cause of HarvestPlus showing roughly 2× the elapsed time
+    /// for a running timer (reported by Michael, see CHANGELOG 1.1.0).
+    ///
+    /// If `polledAt` is nil (haven't polled yet), returns `hours` with no
+    /// extrapolation rather than over- or under-stating.
+    func liveHours(now: Date, polledAt: Date?) -> Double {
+        guard isRunning, let polledAt = polledAt else { return hours }
+        let secondsSincePoll = max(0, now.timeIntervalSince(polledAt))
+        return hours + (secondsSincePoll / 3600.0)
     }
 }
 

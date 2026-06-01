@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Integrations settings: the Harvest connection (account ID + personal
+//  access token, with test / save) and calendar access for the meeting
+//  overlay.
+//
 
 import SwiftUI
 import EventKit
@@ -305,16 +309,32 @@ struct IntegrationsSettingsTab: View {
     }
 
     private func saveCredentials() {
+        // Trim — pasted tokens/account ids routinely carry a trailing newline or
+        // stray spaces, which would otherwise be saved verbatim and produce a
+        // baffling 401 later.
+        let cleanAccountId = accountId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanAccountId.isEmpty, !cleanToken.isEmpty else {
+            testResult = TestResult(isSuccess: false, message: "Account ID and API token can't be empty.")
+            return
+        }
+        // Reflect the cleaned values back so the field shows what was actually saved.
+        accountId = cleanAccountId
+        apiToken = cleanToken
+
         do {
-            try KeychainHelper.save(key: KeychainKey.harvestAccountId, string: accountId)
-            try KeychainHelper.save(key: KeychainKey.harvestToken, string: apiToken)
-            appState.settings.harvestAccountId = accountId
+            // Save the token FIRST. If it throws, the stored account id is still
+            // the old one — so we never end up with a new account id paired to a
+            // stale/absent token (which would build a broken client on next launch).
+            try KeychainHelper.save(key: KeychainKey.harvestToken, string: cleanToken)
+            try KeychainHelper.save(key: KeychainKey.harvestAccountId, string: cleanAccountId)
+            appState.settings.harvestAccountId = cleanAccountId
 
             withAnimation {
                 isSaved = true
             }
             // Initialize the API client in AppState
-            appState.initializeHarvestClient(accountId: accountId, token: apiToken)
+            appState.initializeHarvestClient(accountId: cleanAccountId, token: cleanToken)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation { isSaved = false }
@@ -325,12 +345,14 @@ struct IntegrationsSettingsTab: View {
     }
 
     private func testConnection() {
-        guard !accountId.isEmpty, !apiToken.isEmpty else { return }
+        let cleanAccountId = accountId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanAccountId.isEmpty, !cleanToken.isEmpty else { return }
 
         isTesting = true
         testResult = nil
 
-        let client = HarvestAPIClient(accountId: accountId, token: apiToken)
+        let client = HarvestAPIClient(accountId: cleanAccountId, token: cleanToken)
 
         Task {
             do {

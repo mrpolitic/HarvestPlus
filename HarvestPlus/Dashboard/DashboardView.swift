@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The dashboard window shell: the segmented Daily / Weekly / Monthly /
+//  Yearly tab switcher and the export button that hangs off it.
+//
 
 import SwiftUI
 import AppKit

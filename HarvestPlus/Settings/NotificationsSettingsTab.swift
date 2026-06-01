@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Notifications settings: toggles and thresholds for the nudge, idle,
+//  long-timer, and end-of-day / end-of-week summary banners, plus the
+//  banner's screen position.
+//
 
 import SwiftUI
 

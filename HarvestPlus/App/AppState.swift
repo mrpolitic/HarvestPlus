@@ -4,146 +4,16 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The app's single source of truth (`ObservableObject`). Owns the timer
+//  state, today's / this week's entries, settings, the Harvest client, and
+//  the monitor / banner / idle / update helpers; persists settings to
+//  UserDefaults and loads saved credentials at launch. The model/settings
+//  types it holds live in TimerState.swift, WorkSchedule.swift, and
+//  AppSettings.swift.
+//
 
 import SwiftUI
 import Combine
-
-// MARK: - Timer State
-
-enum TimerState: Equatable {
-    case running(TimeEntry)
-    case stopped
-    case offline
-
-    static func == (lhs: TimerState, rhs: TimerState) -> Bool {
-        switch (lhs, rhs) {
-        case (.running(let a), .running(let b)):
-            return a.id == b.id
-        case (.stopped, .stopped):
-            return true
-        case (.offline, .offline):
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-// MARK: - Work Schedule
-
-struct WorkSchedule {
-    var workStartTime: DateComponents = DateComponents(hour: 8, minute: 0)
-    var workEndTime: DateComponents = DateComponents(hour: 16, minute: 0)
-
-    // Per-day targets (Calendar weekday: 1=Sun, 2=Mon, ..., 7=Sat)
-    var targetMon: Double = 7.5
-    var targetTue: Double = 7.5
-    var targetWed: Double = 7.5
-    var targetThu: Double = 7.5
-    var targetFri: Double = 7.0
-    var targetSat: Double = 0.0
-    var targetSun: Double = 0.0
-
-    // Kept for backward compatibility with older persistence
-    var dailyTargetMonThu: Double {
-        get { targetMon }
-        set { targetMon = newValue; targetTue = newValue; targetWed = newValue; targetThu = newValue }
-    }
-    var dailyTargetFri: Double {
-        get { targetFri }
-        set { targetFri = newValue }
-    }
-
-    var lunchDuration: TimeInterval = 30 * 60  // 30 minutes
-    var lunchWindowStart: DateComponents? = nil
-
-    var weeklyTarget: Double {
-        targetMon + targetTue + targetWed + targetThu + targetFri + targetSat + targetSun
-    }
-
-    func dailyTarget(for date: Date) -> Double {
-        let weekday = Calendar.current.component(.weekday, from: date)
-        switch weekday {
-        case 1: return targetSun
-        case 2: return targetMon
-        case 3: return targetTue
-        case 4: return targetWed
-        case 5: return targetThu
-        case 6: return targetFri
-        case 7: return targetSat
-        default: return 0
-        }
-    }
-
-    func isWorkingHours(at date: Date) -> Bool {
-        let calendar = Calendar.current
-
-        // No work on days with 0 target
-        if dailyTarget(for: date) == 0 { return false }
-
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let currentMinutes = hour * 60 + minute
-
-        let startMinutes = (workStartTime.hour ?? 8) * 60 + (workStartTime.minute ?? 0)
-        let endMinutes = (workEndTime.hour ?? 16) * 60 + (workEndTime.minute ?? 0)
-
-        return currentMinutes >= startMinutes && currentMinutes < endMinutes
-    }
-}
-
-// MARK: - App Settings
-
-struct AppSettings {
-    // General
-    var launchAtLogin: Bool = false
-    var pollingInterval: TimeInterval = 60
-
-    // Work Schedule
-    var workSchedule: WorkSchedule = WorkSchedule()
-
-    // Notifications
-    var timerNudgeEnabled: Bool = true
-    var bannerPosition: BannerPosition = .top
-    var snoozeDuration: TimeInterval = 15 * 60  // 15 minutes
-    var idleDetectionEnabled: Bool = true
-    var idleThreshold: TimeInterval = 15 * 60
-    var longTimerWarningEnabled: Bool = true
-    var longTimerThreshold: TimeInterval = 3 * 60 * 60  // 3 hours
-    var eodSummaryEnabled: Bool = true
-    var eodSummaryTime: DateComponents = DateComponents(hour: 16, minute: 0)
-    var eowSummaryEnabled: Bool = true
-    var eowSummaryTime: DateComponents = DateComponents(hour: 16, minute: 0)
-    var autoStopOnSleep: Bool = false
-
-    // Integrations
-    var harvestAccountId: String = ""
-    var calendarOverlayEnabled: Bool = true
-
-    // Holidays
-    var holidayTaskNames: String = "Holiday, Holiday (feriefridag)"
-    var holidayICSUrl: String = ""
-
-    // Export
-    var defaultExportFormat: ExportFormat = .pdf
-    var pdfPaperSize: PaperSize = .a4
-    var projectNameDisplayRegex: String = "\\[\\d+\\]\\s*"
-}
-
-enum BannerPosition: String, CaseIterable {
-    case top = "Top"
-    case bottom = "Bottom"
-}
-
-enum ExportFormat: String, CaseIterable {
-    case pdf = "PDF"
-    case csv = "CSV"
-}
-
-enum PaperSize: String, CaseIterable {
-    case a4 = "A4"
-    case letter = "Letter"
-}
 
 // MARK: - App State
 
@@ -154,6 +24,12 @@ final class AppState: ObservableObject {
     @Published var weekEntries: [TimeEntry] = []
     @Published var settings: AppSettings = AppSettings()
     @Published var isConnected: Bool = false
+
+    /// Wall-clock time of the most recent successful Harvest API poll.
+    /// Live elapsed time for the running timer is extrapolated from this
+    /// value (not from `timer_started_at`), because Harvest's API returns
+    /// `hours` as the live total at poll time. See TimeEntry.liveHours().
+    @Published var lastPolledAt: Date?
 
     private(set) var harvestClient: HarvestAPIClient?
     /// Token kept in memory so the Settings UI can read it without a second
@@ -166,6 +42,12 @@ final class AppState: ObservableObject {
     private(set) var idleDetector: IdleDetector?
     private(set) var systemEventHandler: SystemEventHandler?
     @Published var actionError: String? = nil
+
+    /// Guards the timer mutation actions (start / stop / stop-and-subtract) so a
+    /// double-click — or a manual Stop racing the auto-stop-on-sleep — can't fire
+    /// two Harvest writes for the same entry (the second would 422 and surface a
+    /// spurious error). Set/cleared on the main actor around the network round-trip.
+    private var isApplyingTimerAction = false
 
     // Calendar integration (EventKit)
     let calendarService = CalendarService()
@@ -182,7 +64,8 @@ final class AppState: ObservableObject {
     @Published var projectAssignments: [ProjectAssignment] = []
     @Published var isLoadingProjectAssignments: Bool = false
 
-    // Auto-update checker (GitHub Releases)
+    // Sparkle-based auto-updater. Initialised eagerly so the background
+    // scheduler is running before the user ever opens Settings.
     let updateChecker = UpdateChecker()
 
     init() {
@@ -213,10 +96,10 @@ final class AppState: ObservableObject {
             todayMeetings = calendarService.getEvents(for: Date())
         }
 
-        // Kick off a non-blocking update check if enough time has passed since
-        // the last one. Safe to call unconditionally — internally no-ops if
-        // the daily interval hasn't elapsed.
-        updateChecker.checkIfDue()
+        // Sparkle handles its own scheduling — the SPUUpdater inside
+        // updateChecker was started in its initializer with
+        // `startingUpdater: true`, so background checks are already armed
+        // and will fire on Sparkle's `SUScheduledCheckInterval` (24h).
     }
 
     func initializeHarvestClient(accountId: String, token: String) {
@@ -265,8 +148,11 @@ final class AppState: ObservableObject {
     // MARK: - Timer Actions
 
     func stopCurrentTimer() async {
-        guard let client = harvestClient,
+        guard !isApplyingTimerAction,
+              let client = harvestClient,
               let entry = currentRunningEntry else { return }
+        isApplyingTimerAction = true
+        defer { isApplyingTimerAction = false }
 
         do {
             _ = try await client.stopTimer(entryId: entry.id)
@@ -280,7 +166,9 @@ final class AppState: ObservableObject {
     }
 
     func startTimer(projectId: Int, taskId: Int) async {
-        guard let client = harvestClient else { return }
+        guard !isApplyingTimerAction, let client = harvestClient else { return }
+        isApplyingTimerAction = true
+        defer { isApplyingTimerAction = false }
 
         do {
             let entry = try await client.startTimer(projectId: projectId, taskId: taskId)
@@ -295,9 +183,12 @@ final class AppState: ObservableObject {
 
     /// Stop the current timer and subtract the idle duration from the entry.
     func stopAndSubtractIdleTime() async {
-        guard let client = harvestClient,
+        guard !isApplyingTimerAction,
+              let client = harvestClient,
               let entry = currentRunningEntry,
               let detector = idleDetector else { return }
+        isApplyingTimerAction = true
+        defer { isApplyingTimerAction = false }
 
         let idleHours = detector.currentIdleDuration / 3600.0
 
@@ -311,6 +202,7 @@ final class AppState: ObservableObject {
 
             timerState = .stopped
             detector.resetIdleState()
+            invalidateEntryCache()
             // Refresh data immediately
             await timerMonitor?.pollNow()
         } catch {
@@ -342,21 +234,27 @@ final class AppState: ObservableObject {
             let sunday = isoCal.date(byAdding: .day, value: 6, to: monday)!
             weekEntries = try await client.getTimeEntries(from: monday, to: sunday)
         } catch {
-            if let apiError = error as? HarvestAPIError,
-               case .unauthorized = apiError {
-                isConnected = false
+            if let apiError = error as? HarvestAPIError {
+                switch apiError {
+                case .unauthorized:
+                    isConnected = false
+                case .networkError:
+                    // Credentials are fine — we're just offline. Show it now
+                    // instead of waiting for the first scheduled poll.
+                    timerState = .offline
+                default:
+                    break
+                }
             }
             // Keep previous state on other errors
         }
     }
 
     var todayTotalHours: Double {
-        todayEntries.reduce(0) { total, entry in
-            if entry.isRunning, let startedAt = entry.timerStartedAt {
-                let elapsed = Date().timeIntervalSince(startedAt) / 3600.0
-                return total + entry.hours + elapsed
-            }
-            return total + entry.hours
+        let now = Date()
+        let polledAt = lastPolledAt
+        return todayEntries.reduce(0) { total, entry in
+            total + entry.liveHours(now: now, polledAt: polledAt)
         }
     }
 
@@ -378,20 +276,6 @@ final class AppState: ObservableObject {
             return entry
         }
         return nil
-    }
-
-    // MARK: - Overtime (Week)
-
-    var currentWeekSummary: WeekSummary {
-        OvertimeCalculator.weekSummary(
-            containing: Date(),
-            entries: weekEntries,
-            settings: settings
-        )
-    }
-
-    var weeklyNetOvertime: Double {
-        currentWeekSummary.delta
     }
 
     // MARK: - Export Data (non-reactive — does NOT trigger view re-renders)
@@ -434,6 +318,19 @@ final class AppState: ObservableObject {
         } catch {
             return []
         }
+    }
+
+    /// Wall-clock time when the entries for this date range were last
+    /// fetched from Harvest. Dashboards use this as `polledAt` for live-
+    /// elapsed extrapolation so the running timer's contribution matches
+    /// `entry.hours` exactly — using the global `lastPolledAt` instead
+    /// can be off by tens of seconds because that's updated by
+    /// `TimerMonitor` on a different schedule than the dashboards' cache.
+    /// Returns the global `lastPolledAt` as a fallback when nothing is
+    /// cached for this range yet (e.g., first paint before fetch lands).
+    func fetchedAt(from: Date, to: Date) -> Date? {
+        let key = cacheKey(from: from, to: to)
+        return entryCache[key]?.fetchedAt ?? lastPolledAt
     }
 
     /// Invalidate cache (e.g. after starting/stopping a timer).
@@ -583,6 +480,23 @@ final class AppState: ObservableObject {
         // Export
         settings.defaultExportFormat = ExportFormat(rawValue: ud.string(forKey: "defaultExportFormat") ?? "PDF") ?? .pdf
         settings.pdfPaperSize = PaperSize(rawValue: ud.string(forKey: "pdfPaperSize") ?? "A4") ?? .a4
-        settings.projectNameDisplayRegex = ud.string(forKey: "projectNameDisplayRegex") ?? "\\[\\d+\\]\\s*"
+        // Default true; treat a stored missing key as "on" so existing
+        // users keep the prefix-stripping behaviour they had before.
+        settings.stripProjectPrefixCodes = ud.object(forKey: "stripProjectPrefixCodes") as? Bool ?? true
+        // Stored as `yyyy-MM-dd` so it's human-readable in the plist and
+        // round-trips cleanly across time zones.
+        if let dateString = ud.string(forKey: "reportStartDate"),
+           let date = Self.persistedDateFormatter.date(from: dateString) {
+            settings.reportStartDate = date
+        }
     }
+
+    /// Day-only formatter for persisting cutoff-style dates.
+    static let persistedDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        return f
+    }()
 }

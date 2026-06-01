@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  A horizontal day timeline that lays out time entries and meetings against
+//  the configured working hours, with the lunch gap marked. Used by the
+//  Daily dashboard.
+//
 
 import SwiftUI
 
@@ -74,7 +78,7 @@ struct TimelineBar: View {
                     let wxEnd = xPos(minute: weMin, width: width)
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color(.separatorColor).opacity(0.12))
-                        .frame(width: wxEnd - wxStart, height: 40)
+                        .frame(width: max(0, wxEnd - wxStart), height: 40)
                         .offset(x: wxStart)
 
                     // Lunch overlay
@@ -85,7 +89,7 @@ struct TimelineBar: View {
                         let lxEnd = xPos(minute: lEnd, width: width)
                         RoundedRectangle(cornerRadius: 4)
                             .fill(AppColor.lunchBreak.opacity(0.4))
-                            .frame(width: lxEnd - lxStart, height: 40)
+                            .frame(width: max(0, lxEnd - lxStart), height: 40)
                             .offset(x: lxStart)
                     }
 
@@ -119,7 +123,7 @@ struct TimelineBar: View {
                             .fill(projectColor(for: entry))
                             .frame(width: bw, height: 30)
                             .offset(x: bx, y: 0)
-                            .help("\(entry.displayProjectName) / \(entry.task.name) — \(formatDuration(entry.hours))")
+                            .help("\(entry.displayProjectName) / \(entry.task.name) — \(TimeFormat.clockExact(entry.hours))")
                     }
 
                     // "Now" indicator
@@ -293,11 +297,6 @@ struct TimelineBar: View {
         ProjectPalette.color(for: entry.project.id)
     }
 
-    private func formatDuration(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        return String(format: "%d:%02d", h, m)
-    }
 
     private func formatMeetingTime(_ meeting: CalendarEvent) -> String {
         let startH = meeting.startMinuteOfDay / 60

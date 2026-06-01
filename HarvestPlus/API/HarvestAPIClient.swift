@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The Harvest v2 REST client. Wraps the endpoints HarvestPlus needs —
+//  running timer, time entries for a date range (paginated), project
+//  assignments, and stop/restart/create — behind bearer-token auth.
+//
 
 import Foundation
 
@@ -40,8 +44,9 @@ final class HarvestAPIClient: Sendable {
         var allEntries: [TimeEntry] = []
         var currentPage = 1
         var totalPages = 1
+        let maxPages = 100  // safety ceiling: 100 × 2000 = 200k entries, far beyond any real range
 
-        while currentPage <= totalPages {
+        while currentPage <= totalPages && currentPage <= maxPages {
             let response: TimeEntriesResponse = try await performRequest(
                 endpoint: "/time_entries",
                 queryItems: [
@@ -51,6 +56,9 @@ final class HarvestAPIClient: Sendable {
                     URLQueryItem(name: "per_page", value: "2000")
                 ]
             )
+            // Stop if a page comes back empty even though total_pages claims more —
+            // guards against an infinite loop on a malformed pagination response.
+            if response.timeEntries.isEmpty { break }
             allEntries.append(contentsOf: response.timeEntries)
             totalPages = response.totalPages
             currentPage += 1
@@ -121,8 +129,9 @@ final class HarvestAPIClient: Sendable {
         var allProjects: [HarvestProject] = []
         var currentPage = 1
         var totalPages = 1
+        let maxPages = 100
 
-        while currentPage <= totalPages {
+        while currentPage <= totalPages && currentPage <= maxPages {
             let response: ProjectsResponse = try await performRequest(
                 endpoint: "/projects",
                 queryItems: [
@@ -130,6 +139,7 @@ final class HarvestAPIClient: Sendable {
                     URLQueryItem(name: "page", value: String(currentPage))
                 ]
             )
+            if response.projects.isEmpty { break }
             allProjects.append(contentsOf: response.projects)
             totalPages = response.totalPages
             currentPage += 1
@@ -144,8 +154,9 @@ final class HarvestAPIClient: Sendable {
         var allAssignments: [TaskAssignment] = []
         var currentPage = 1
         var totalPages = 1
+        let maxPages = 100
 
-        while currentPage <= totalPages {
+        while currentPage <= totalPages && currentPage <= maxPages {
             let response: TaskAssignmentsResponse = try await performRequest(
                 endpoint: "/projects/\(projectId)/task_assignments",
                 queryItems: [
@@ -153,6 +164,7 @@ final class HarvestAPIClient: Sendable {
                     URLQueryItem(name: "page", value: String(currentPage))
                 ]
             )
+            if response.taskAssignments.isEmpty { break }
             allAssignments.append(contentsOf: response.taskAssignments)
             totalPages = response.totalPages
             currentPage += 1
@@ -167,14 +179,16 @@ final class HarvestAPIClient: Sendable {
         var all: [ProjectAssignment] = []
         var currentPage = 1
         var totalPages = 1
+        let maxPages = 100
 
-        while currentPage <= totalPages {
+        while currentPage <= totalPages && currentPage <= maxPages {
             let response: ProjectAssignmentsResponse = try await performRequest(
                 endpoint: "/users/me/project_assignments",
                 queryItems: [
                     URLQueryItem(name: "page", value: String(currentPage))
                 ]
             )
+            if response.projectAssignments.isEmpty { break }
             all.append(contentsOf: response.projectAssignments)
             totalPages = response.totalPages
             currentPage += 1
@@ -230,7 +244,18 @@ final class HarvestAPIClient: Sendable {
         let maxRetries = 3
 
         while true {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await URLSession.shared.data(for: request)
+            } catch {
+                // Offline / timeout / DNS throws a bare URLError. Wrap it as a
+                // typed network error so callers (poll / fetchInitialData) can
+                // flip to the .offline state — otherwise the URLError slips past
+                // their `as? HarvestAPIError` check and the app looks "connected"
+                // with stale data.
+                throw HarvestAPIError.networkError(error)
+            }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw HarvestAPIError.networkError(
@@ -277,7 +302,11 @@ final class HarvestAPIClient: Sendable {
                     throw HarvestAPIError.decodingError(error)
                 }
 
-            case 401:
+            case 401, 403:
+                // 401 = bad/missing token; 403 = token revoked or lacking scope.
+                // Both mean these credentials won't work, so surface as
+                // unauthorized and let the app disconnect rather than treating
+                // it as a transient server error.
                 throw HarvestAPIError.unauthorized
 
             case 429:

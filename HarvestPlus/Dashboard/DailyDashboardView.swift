@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The Daily dashboard tab: today's hours vs. target, the timeline bar,
+//  meetings, and the day's time entries.
+//
 
 import SwiftUI
 import Combine
@@ -40,11 +43,24 @@ struct DailyDashboardView: View {
     @State private var isLoading: Bool = false
     @State private var meetingToLog: CalendarEvent?
 
+    /// Wall-clock time when `entries` were last fetched from Harvest.
+    /// Used as `polledAt` for live-elapsed extrapolation so the dashboard's
+    /// running-timer contribution matches the popover's exactly. See
+    /// `AppState.fetchedAt(from:to:)` for why this is preferable to
+    /// `appState.lastPolledAt`.
+    private var entriesFetchedAt: Date? {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: selectedDate)
+        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
+        return appState.fetchedAt(from: start, to: end)
+    }
+
     private var daySummary: DaySummary {
         OvertimeCalculator.daySummary(
             date: selectedDate,
             entries: entries,
-            settings: appState.settings
+            settings: appState.settings,
+            polledAt: entriesFetchedAt
         )
     }
 
@@ -54,15 +70,20 @@ struct DailyDashboardView: View {
             date: previousDate,
             entries: previousDayEntries,
             settings: appState.settings
+            // No polledAt — previous-day entries are historical; nothing is running there.
         )
     }
 
     private var projects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: entries)
+        DashboardMetrics.projectHours(
+            from: entries,
+            polledAt: entriesFetchedAt,
+            cutoff: appState.settings.reportStartDate
+        )
     }
 
     private var previousProjects: [ProjectSummary] {
-        DashboardMetrics.projectHours(from: previousDayEntries)
+        DashboardMetrics.projectHours(from: previousDayEntries, polledAt: nil)
     }
 
     private var meetingHours: Double {
@@ -192,7 +213,7 @@ struct DailyDashboardView: View {
                     : AppColor.harvestOrange
                 results.append(DashboardInsight(
                     icon: rounded > 0 ? "chart.line.uptrend.xyaxis" : "chart.line.downtrend.xyaxis",
-                    text: "\(arrow) \(abs(rounded))% hours vs yesterday (\(formatHoursCompact(previousDaySummary.actual)))",
+                    text: "\(arrow) \(abs(rounded))% hours vs yesterday (\(TimeFormat.clock(previousDaySummary.actual)))",
                     accent: color
                 ))
             }
@@ -250,7 +271,7 @@ struct DailyDashboardView: View {
         if daySummary.holidayHours > 0 {
             results.append(DashboardInsight(
                 icon: "sun.max.fill",
-                text: "Holiday hours logged — \(formatHoursCompact(daySummary.holidayHours))",
+                text: "Holiday hours logged — \(TimeFormat.clock(daySummary.holidayHours))",
                 accent: Color(red: 0.61, green: 0.35, blue: 0.71)
             ))
         }
@@ -302,17 +323,17 @@ struct DailyDashboardView: View {
 
             // Center text — hero stat: hours logged today
             VStack(spacing: 2) {
-                Text(formatHoursCompact(daySummary.actual))
+                Text(TimeFormat.clock(daySummary.actual))
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .monospacedDigit()
 
-                Text(showProgress ? "of \(formatHoursCompact(daySummary.expected))" : "logged")
+                Text(showProgress ? "of \(TimeFormat.clock(daySummary.expected))" : "logged")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 // Overtime badge — only when there's a daily target set
                 if isOver {
-                    Text("+\(formatHoursCompact(daySummary.delta))")
+                    Text("+\(TimeFormat.clock(daySummary.delta))")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColor.harvestRed)
                 }
@@ -340,7 +361,7 @@ struct DailyDashboardView: View {
             if !meetings.isEmpty {
                 statRow(
                     label: "Meetings",
-                    value: formatHoursCompact(meetingHours),
+                    value: TimeFormat.clock(meetingHours),
                     color: AppColor.meetingBlue
                 )
             }
@@ -348,7 +369,7 @@ struct DailyDashboardView: View {
             if daySummary.holidayHours > 0 {
                 statRow(
                     label: "Holiday",
-                    value: formatHoursCompact(daySummary.holidayHours),
+                    value: TimeFormat.clock(daySummary.holidayHours),
                     color: Color(red: 0.61, green: 0.35, blue: 0.71)
                 )
             }
@@ -390,13 +411,13 @@ struct DailyDashboardView: View {
 
             Spacer()
 
-            Text(formatHoursSigned(delta))
+            Text(TimeFormat.signed(delta))
                 .font(.callout)
                 .fontWeight(.semibold)
                 .monospacedDigit()
                 .foregroundStyle(color)
         }
-        .help("Yesterday: \(formatHoursCompact(previousDaySummary.actual))")
+        .help("Yesterday: \(TimeFormat.clock(previousDaySummary.actual))")
     }
 
     private func statRow(label: String, value: String, color: Color) -> some View {
@@ -441,12 +462,12 @@ struct DailyDashboardView: View {
                 Spacer()
 
                 if target > 0 {
-                    Text("\(formatHoursCompact(totalLogged)) of \(formatHoursCompact(target))")
+                    Text("\(TimeFormat.clock(totalLogged)) of \(TimeFormat.clock(target))")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 } else if totalLogged > 0 {
-                    Text(formatHoursCompact(totalLogged))
+                    Text(TimeFormat.clock(totalLogged))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -491,7 +512,7 @@ struct DailyDashboardView: View {
                         .foregroundStyle(.secondary)
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    Text(formatHoursCompact(meetingHours))
+                    Text(TimeFormat.clock(meetingHours))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -604,6 +625,10 @@ struct DailyDashboardView: View {
                 }
             }
         }
+        // Stretch to the column width even when content is just the empty-
+        // state line. Without this, an empty `Entries` card collapses to
+        // the width of "No time entries" and looks like an orphan tile.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
         .harvestSurface(cornerRadius: AppRadius.md)
     }
@@ -646,23 +671,8 @@ struct DailyDashboardView: View {
     }
 
     private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((abs(hours) - Double(abs(h))) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         return String(format: "%dh %02dm", h, m)
     }
 
-    private func formatHoursCompact(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
-        if m == 0 { return "\(h)h" }
-        return String(format: "%d:%02d", h, m)
-    }
-
-    private func formatHoursSigned(_ hours: Double) -> String {
-        let sign = hours >= 0 ? "+" : "-"
-        let abs = abs(hours)
-        let h = Int(abs)
-        let m = Int((abs - Double(h)) * 60)
-        return String(format: "%@%dh %02dm", sign, h, m)
-    }
 }

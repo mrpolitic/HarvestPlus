@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  NSApplicationDelegate. Bridges AppKit system notifications (sleep/wake,
+//  screen lock/unlock) into the in-app Notification.Name events that
+//  SystemEventHandler listens for, and handles the `harvestplus://` URL scheme.
+//
 
 import AppKit
 import SwiftUI

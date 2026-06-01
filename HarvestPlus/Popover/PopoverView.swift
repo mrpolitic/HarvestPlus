@@ -156,7 +156,7 @@ struct PopoverView: View {
     private var todayHero: some View {
         Button {
             openWindow(id: "dashboard")
-            activateApp()
+            focusWindow(id: "dashboard")
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -337,7 +337,11 @@ struct PopoverView: View {
 
             Spacer()
 
-            ElapsedTimeView(startedAt: entry.timerStartedAt, baseHours: entry.hours)
+            ElapsedTimeView(
+                baseHours: entry.hours,
+                polledAt: appState.lastPolledAt,
+                isRunning: entry.isRunning
+            )
 
             Button {
                 Task { await appState.stopCurrentTimer() }
@@ -397,15 +401,54 @@ struct PopoverView: View {
         .harvestSurface(cornerRadius: AppRadius.sm)
     }
 
-    /// Bring Harvest's menu-bar app to the front, or launch it if not running.
+    /// Open Harvest, preferring the newest installed copy (the redesigned
+    /// 3.x app) from any location, then any older copy, then the web app.
+    ///
+    /// Both the classic (2.x) and redesigned (3.x) apps share the bundle id
+    /// `com.getharvest.harvestxapp`, so we can't lean on LaunchServices'
+    /// single "preferred" pick — it favors `/Applications` and can resolve
+    /// to a stale old copy. Instead we enumerate every installed copy and
+    /// open the highest version. `openApplication` launches-or-foregrounds
+    /// reliably, including the new Electron app's window, which both
+    /// `NSRunningApplication.activate()` and a bare `harvest://` deep link
+    /// failed to surface.
     static func openHarvestApp() {
-        if let harvestApp = NSRunningApplication.runningApplications(
-            withBundleIdentifier: "com.getharvest.harvestxapp"
-        ).first {
-            harvestApp.activate()
-        } else {
-            NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Harvest.app"))
+        let bundleID = "com.getharvest.harvestxapp"  // shared by 2.x and 3.x
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+
+        // 1. Newest installed copy, wherever it lives → the 3.x app wins
+        //    over a 2.x even if the old one sits in /Applications.
+        let copies = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: bundleID)
+        if let newest = copies.max(by: { harvestVersion($0) < harvestVersion($1) }) {
+            NSWorkspace.shared.openApplication(at: newest, configuration: config)
+            return
         }
+
+        // 2. Defensive: a copy at the classic fixed path that LaunchServices
+        //    didn't surface for some reason.
+        let legacyURL = URL(fileURLWithPath: "/Applications/Harvest.app")
+        if FileManager.default.fileExists(atPath: legacyURL.path) {
+            NSWorkspace.shared.openApplication(at: legacyURL, configuration: config)
+            return
+        }
+
+        // 3. No native Harvest installed → fall back to the web app.
+        if let web = URL(string: "https://id.getharvest.com") {
+            NSWorkspace.shared.open(web)
+        }
+    }
+
+    /// (major, minor, patch) parsed from an app bundle's
+    /// CFBundleShortVersionString; (0,0,0) when unreadable. Used to pick the
+    /// newest Harvest among multiple installed copies. Swift tuples are
+    /// Comparable element-wise, so `(3,0,4) > (2,5,7)` does the right thing.
+    private static func harvestVersion(_ url: URL) -> (Int, Int, Int) {
+        guard let v = Bundle(url: url)?.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            return (0, 0, 0)
+        }
+        let p = v.split(separator: ".").map { Int($0) ?? 0 }
+        return (p.count > 0 ? p[0] : 0, p.count > 1 ? p[1] : 0, p.count > 2 ? p[2] : 0)
     }
 
     // MARK: - Logged Today
@@ -507,8 +550,7 @@ struct PopoverView: View {
 
     private func formatEntryHours(_ hours: Double) -> String {
         if hours < 0.01 { return "0m" }
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         if h == 0 { return "\(m)m" }
         if m == 0 { return "\(h)h" }
         return String(format: "%dh %02dm", h, m)
@@ -589,7 +631,7 @@ struct PopoverView: View {
         Button {
             appState.pendingMeetingEntry = meeting
             openWindow(id: "meeting-entry")
-            activateApp()
+            focusWindow(id: "meeting-entry")
         } label: {
             HStack(spacing: 8) {
                 Text(formatMeetingTime(meeting.start))
@@ -648,7 +690,7 @@ struct PopoverView: View {
             .help("Open settings (⌘,)")
             // SettingsLink opens the scene but doesn't activate a LSUIElement
             // app — without this, the window lands behind Xcode/Finder/etc.
-            .simultaneousGesture(TapGesture().onEnded { activateApp() })
+            .simultaneousGesture(TapGesture().onEnded { focusWindow(id: "settings") })
 
             Spacer()
 
@@ -667,20 +709,35 @@ struct PopoverView: View {
 
     // MARK: - Activation
 
-    /// Bring the app forward after opening a window from the menu-bar popover.
-    /// HarvestPlus is `LSUIElement = YES`, so `openWindow(id:)` creates the
-    /// window but doesn't activate the app — meaning the new window lands
-    /// behind whatever was frontmost. This forces focus to the freshly-opened
-    /// window.
-    private func activateApp() {
+    /// Bring a window opened from the menu-bar popover to the very front.
+    /// HarvestPlus is `LSUIElement = YES`, so `openWindow(id:)` / `SettingsLink`
+    /// create the window but leave this accessory app in the background — the
+    /// new window then lands behind whatever was frontmost.
+    ///
+    /// We activate the app and explicitly raise the matching window. This runs
+    /// on the next runloop tick because, at the moment the opening call returns,
+    /// the window doesn't exist yet — there'd be nothing to raise. Matching is by
+    /// the scene `id` (SwiftUI sets it as the `NSWindow` identifier), with a
+    /// case-insensitive `contains` fallback so the Settings window — whose
+    /// identifier is `com_apple_SwiftUI_Settings_window` — is still found via
+    /// "settings".
+    private func focusWindow(id: String) {
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            let window = NSApp.windows.first { win in
+                guard win.canBecomeMain, let rawID = win.identifier?.rawValue else { return false }
+                return rawID == id || rawID.localizedCaseInsensitiveContains(id)
+            }
+            window?.makeKeyAndOrderFront(nil)
+            window?.orderFrontRegardless()
+        }
     }
 
     // MARK: - Formatting
 
     private func formatHours(_ hours: Double) -> String {
-        let h = Int(hours)
-        let m = Int((hours - Double(h)) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         if m == 0 {
             return "\(h)h"
         }
@@ -688,54 +745,11 @@ struct PopoverView: View {
     }
 
     private func formatDelta(_ hours: Double) -> String {
-        let abs = abs(hours)
-        let h = Int(abs)
-        let m = Int((abs - Double(h)) * 60)
+        let (h, m) = TimeFormat.hoursAndMinutes(hours)
         let sign = hours < 0 ? "-" : ""
         if h == 0 {
             return String(format: "%@%dm", sign, m)
         }
         return String(format: "%@%dh %02dm", sign, h, m)
-    }
-}
-
-// MARK: - Elapsed Time View
-
-struct ElapsedTimeView: View {
-    let startedAt: Date?
-    let baseHours: Double
-
-    @State private var now = Date()
-    @State private var timerCancellable: AnyCancellable?
-
-    var body: some View {
-        Text(formattedElapsed)
-            .font(.title2)
-            .monospacedDigit()
-            .onAppear {
-                // Only subscribe while the view is in the hierarchy. Stops
-                // the 1 Hz tick when the popover is closed, preventing
-                // needless view-body re-evaluation.
-                timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
-                    .autoconnect()
-                    .sink { date in
-                        now = date
-                    }
-            }
-            .onDisappear {
-                timerCancellable?.cancel()
-                timerCancellable = nil
-            }
-    }
-
-    private var formattedElapsed: String {
-        var totalSeconds = Int(baseHours * 3600)
-        if let started = startedAt {
-            totalSeconds += Int(now.timeIntervalSince(started))
-        }
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%d:%02d:%02d", hours, minutes, seconds)
     }
 }

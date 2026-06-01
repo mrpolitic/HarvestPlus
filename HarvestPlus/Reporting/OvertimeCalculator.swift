@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  The summary model types (Day / Week / Month) and the logic that turns raw
+//  entries + the work schedule + holidays into expected-vs-actual hours and
+//  overtime deltas. The dashboards and the report exporter consume these.
+//
 
 import Foundation
 
@@ -34,7 +38,6 @@ struct WeekSummary: Identifiable {
     var expectedTotal: Double { days.reduce(0) { $0 + $1.expected } }
     var actualTotal: Double { days.reduce(0) { $0 + $1.actual } }
     var delta: Double { actualTotal - expectedTotal }
-    var holidayHoursTotal: Double { days.reduce(0) { $0 + $1.holidayHours } }
 }
 
 // MARK: - Month Summary
@@ -60,10 +63,25 @@ struct OvertimeCalculator {
     static func daySummary(
         date: Date,
         entries: [TimeEntry],
-        settings: AppSettings
+        settings: AppSettings,
+        polledAt: Date? = nil
     ) -> DaySummary {
         let cal = Calendar.current
         let startOfDay = cal.startOfDay(for: date)
+
+        // Honor the user-configurable "report start date" cutoff: days
+        // strictly before that cutoff get a zeroed-out summary so they
+        // don't pull the running totals around.
+        if let cutoff = settings.reportStartDate,
+           startOfDay < cal.startOfDay(for: cutoff) {
+            return DaySummary(
+                date: startOfDay,
+                expected: 0,
+                actual: 0,
+                holidayHours: 0,
+                isNonWorkingDay: HolidayEngine.isNonWorkingDay(date, settings: settings)
+            )
+        }
 
         // Filter entries for this day
         let dayEntries = entries.filter { entry in
@@ -74,19 +92,16 @@ struct OvertimeCalculator {
         let isNonWorking = HolidayEngine.isNonWorkingDay(date, settings: settings)
         let expected = isNonWorking ? 0 : settings.workSchedule.dailyTarget(for: date)
 
-        // Sum all hours
+        // Sum all hours, extrapolating the running timer's live elapsed
+        // from `polledAt` (see TimeEntry.liveHours — fixes the 2× bug).
+        let now = Date()
         var totalHours: Double = 0
         var holidayHours: Double = 0
 
         for entry in dayEntries {
-            var hours = entry.hours
-            // If still running, add elapsed time
-            if entry.isRunning, let startedAt = entry.timerStartedAt {
-                hours += Date().timeIntervalSince(startedAt) / 3600.0
-            }
+            let hours = entry.liveHours(now: now, polledAt: polledAt)
             totalHours += hours
 
-            // Check if this is a holiday task
             if HolidayEngine.isHolidayTask(taskName: entry.task.name, settings: settings) {
                 holidayHours += hours
             }
@@ -108,7 +123,8 @@ struct OvertimeCalculator {
         from startDate: Date,
         to endDate: Date,
         entries: [TimeEntry],
-        settings: AppSettings
+        settings: AppSettings,
+        polledAt: Date? = nil
     ) -> [DaySummary] {
         let cal = Calendar.current
 
@@ -121,25 +137,33 @@ struct OvertimeCalculator {
         var results: [DaySummary] = []
         var current = cal.startOfDay(for: startDate)
         let end = cal.startOfDay(for: endDate)
+        let now = Date()
+        let cutoffDay = settings.reportStartDate.map { cal.startOfDay(for: $0) }
 
         while current <= end {
             let key = spentDateFormatter.string(from: current)
             let dayEntries = grouped[key] ?? []
 
             let isNonWorking = HolidayEngine.isNonWorkingDay(current, settings: settings)
-            let expected = isNonWorking ? 0 : settings.workSchedule.dailyTarget(for: current)
+            let isBeforeCutoff = cutoffDay.map { current < $0 } ?? false
+
+            // Pre-cutoff days are still appended (so charts keep their full
+            // date axis) but contribute nothing: expected, actual, holiday
+            // all zero so they don't drag totals or deltas around.
+            let expected: Double = (isBeforeCutoff || isNonWorking)
+                ? 0
+                : settings.workSchedule.dailyTarget(for: current)
 
             var totalHours: Double = 0
             var holidayHours: Double = 0
 
-            for entry in dayEntries {
-                var hours = entry.hours
-                if entry.isRunning, let startedAt = entry.timerStartedAt {
-                    hours += Date().timeIntervalSince(startedAt) / 3600.0
-                }
-                totalHours += hours
-                if HolidayEngine.isHolidayTask(taskName: entry.task.name, settings: settings) {
-                    holidayHours += hours
+            if !isBeforeCutoff {
+                for entry in dayEntries {
+                    let hours = entry.liveHours(now: now, polledAt: polledAt)
+                    totalHours += hours
+                    if HolidayEngine.isHolidayTask(taskName: entry.task.name, settings: settings) {
+                        holidayHours += hours
+                    }
                 }
             }
 
@@ -164,7 +188,8 @@ struct OvertimeCalculator {
     static func weekSummary(
         containing date: Date,
         entries: [TimeEntry],
-        settings: AppSettings
+        settings: AppSettings,
+        polledAt: Date? = nil
     ) -> WeekSummary {
         let cal = Calendar(identifier: .iso8601)
         let weekNumber = cal.component(.weekOfYear, from: date)
@@ -177,7 +202,7 @@ struct OvertimeCalculator {
             ?? cal.startOfDay(for: date)
         let days = (0..<7).compactMap { offset -> DaySummary? in
             guard let day = cal.date(byAdding: .day, value: offset, to: monday) else { return nil }
-            return daySummary(date: day, entries: entries, settings: settings)
+            return daySummary(date: day, entries: entries, settings: settings, polledAt: polledAt)
         }
 
         let sunday = cal.date(byAdding: .day, value: 6, to: monday) ?? monday
@@ -196,7 +221,8 @@ struct OvertimeCalculator {
         from startDate: Date,
         to endDate: Date,
         entries: [TimeEntry],
-        settings: AppSettings
+        settings: AppSettings,
+        polledAt: Date? = nil
     ) -> [WeekSummary] {
         let cal = Calendar(identifier: .iso8601)
         var weeks: [WeekSummary] = []
@@ -211,7 +237,7 @@ struct OvertimeCalculator {
         // spin forever. 520 weeks = ~10 years — well above any real range.
         var safetyCounter = 0
         while currentMonday <= endDate && safetyCounter < 520 {
-            let summary = weekSummary(containing: currentMonday, entries: entries, settings: settings)
+            let summary = weekSummary(containing: currentMonday, entries: entries, settings: settings, polledAt: polledAt)
             weeks.append(summary)
             guard let next = cal.date(byAdding: .weekOfYear, value: 1, to: currentMonday) else { break }
             currentMonday = next
@@ -228,7 +254,8 @@ struct OvertimeCalculator {
         month: Int,
         year: Int,
         entries: [TimeEntry],
-        settings: AppSettings
+        settings: AppSettings,
+        polledAt: Date? = nil
     ) -> MonthSummary {
         let cal = Calendar(identifier: .iso8601)
         guard let firstOfMonth = cal.date(from: DateComponents(year: year, month: month, day: 1)),
@@ -238,7 +265,7 @@ struct OvertimeCalculator {
             return MonthSummary(month: month, year: year, weeks: [])
         }
 
-        let weeks = weekSummaries(from: firstOfMonth, to: lastOfMonth, entries: entries, settings: settings)
+        let weeks = weekSummaries(from: firstOfMonth, to: lastOfMonth, entries: entries, settings: settings, polledAt: polledAt)
 
         return MonthSummary(
             month: month,
@@ -280,7 +307,7 @@ struct OvertimeCalculator {
     /// except the *current in-progress day* has its expected hours prorated to
     /// the fraction of the workday that has elapsed. Without this, a mid-morning
     /// reader sees their pace drop by the full daily target every day and reads
-    /// as "behind" even when perfectly on schedule.
+    /// as "undertime" even when perfectly on schedule.
     static func cumulativePace(
         from daySummaries: [DaySummary],
         asOf now: Date = Date(),
@@ -314,16 +341,6 @@ struct OvertimeCalculator {
         let nowMinutes = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
         let elapsed = max(0, min(span, nowMinutes - startMinutes))
         return Double(elapsed) / Double(span)
-    }
-
-    /// Net overtime for a specific week (convenience).
-    static func weeklyNetOvertime(
-        containing date: Date,
-        entries: [TimeEntry],
-        settings: AppSettings
-    ) -> Double {
-        let week = weekSummary(containing: date, entries: entries, settings: settings)
-        return week.delta
     }
 
     // MARK: - Batch Week/Month from Pre-Computed Days
@@ -372,6 +389,10 @@ struct OvertimeCalculator {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
+        // Pin to the local time zone (the default, made explicit): `spent_date`
+        // is a calendar day, and every other parser of it (DashboardMetrics,
+        // day/week grouping) compares against Calendar.current — they must agree.
+        f.timeZone = .current
         return f
     }()
 

@@ -9,6 +9,11 @@ HarvestPlus is **not** affiliated with or endorsed by Harvest / Iridesco. It's
 a community-built client that talks to the public [Harvest API
 v2](https://help.getharvest.com/api-v2/).
 
+Source-available under the [PolyForm Shield License 1.0.0](./LICENSE) —
+free for any use, including at work, except for building a competing
+product. See [PRIVACY.md](./PRIVACY.md) for what data the app touches and
+where it goes (short answer: almost nothing leaves your Mac).
+
 ---
 
 ## What it does
@@ -108,15 +113,13 @@ Calendar section. Click **Grant Access** and approve the macOS prompt. This
 lets HarvestPlus show your calendar meetings alongside your time entries so
 you can spot unlogged meetings.
 
-> **Why Terminal and not a `.pkg`?** macOS 15 (Sequoia) tightened Gatekeeper
-> so that double-clicking an unsigned `.pkg` or `.app` no longer offers a
-> right-click → Open bypass — users would have to dig into System Settings →
-> Privacy & Security → "Open Anyway" for every install. The `curl | bash`
-> path avoids that friction: `curl` doesn't mark downloads with the
-> `com.apple.quarantine` attribute, so macOS treats the installed app as a
-> local binary and launches it silently. If you'd rather pay Apple $99/year
-> and sign + notarise the build, see
-> [`RELEASING.md`](./RELEASING.md#upgrading-to-the-signednotarised-path-later).
+> **Why Terminal and not a `.pkg`?** Two reasons. First, one Terminal
+> command is shorter than a download-then-double-click flow. Second, the
+> in-app auto-updater runs the same command in a Terminal window when a
+> new release is published, so coworkers only ever learn one install
+> workflow. The app is signed with a Developer ID Application certificate
+> and notarized by Apple, so it would also launch fine from a downloaded
+> `.app` — `curl | bash` is just less typing.
 
 **System requirements**
 
@@ -126,11 +129,14 @@ you can spot unlogged meetings.
 
 **Keeping up to date**
 
-HarvestPlus checks for new releases automatically once per 24 hours. You can
-also force a check from *Settings → General → About → Check for Updates*.
-When an update is available, click **Install Update** — Terminal opens and
-runs the same `curl | bash` one-liner automatically. The running app is
-replaced in-place.
+HarvestPlus checks for new releases automatically once per 24 hours and,
+when one is found, installs it silently in the background — Terminal
+flashes open, runs the install one-liner, and the app relaunches on the
+new version. No password, no clicks, nothing to dismiss.
+
+If you want to check manually, *Settings → General → About → Check for
+Updates* triggers the same flow. The **Install Update** button is also
+there as a manual fallback in case auto-install is ever blocked.
 
 ---
 
@@ -166,10 +172,8 @@ HarvestPlus/
   Info.plist
 
 Scripts/
-  build.sh            # archive → ditto HarvestPlus.app.zip (ad-hoc)
-  install.sh          # curl | bash installer run by coworkers
-  postinstall.sh      # (unused today — kept for future signed .pkg path)
-  ExportOptions.plist # (unused today — kept for future Developer ID path)
+  build.sh   # archive → sign (Developer ID) → notarize → staple → zip
+  install.sh # curl | bash installer run by coworkers (and the in-app updater)
 ```
 
 ### App architecture
@@ -249,25 +253,23 @@ constants rather than constructed per-frame.
   per 24h (and manually on demand).
 - Semver compares the tag (or `name`) against `CFBundleShortVersionString`,
   handling prerelease tails (`1.2.0-beta.1 < 1.2.0`).
-- On finding a newer release, uses `NSAppleScript` to tell Terminal to
-  `do script` with the install one-liner — no file written, no quarantine
-  issue. We don't download in-app: sandboxed apps can't replace their own
-  bundle, and a `URLSession`-downloaded `.zip` would inherit the quarantine
-  xattr.
+- On finding a newer release, auto-installs ~2 s later: uses `NSAppleScript`
+  to tell Terminal to run the install one-liner. The shell quits this
+  process, swaps the bundle, and relaunches the new version. We don't do
+  the swap from inside the app because sandboxed apps can't replace their
+  own bundle on disk while running.
 
 ### Security & privacy
 
 - **App Sandbox**: ON (`ENABLE_APP_SANDBOX = YES`).
 - **Hardened Runtime**: ON (`ENABLE_HARDENED_RUNTIME = YES`).
-- **Code signing**: the `.app` is **ad-hoc signed** (`codesign --sign -`) so
-  it satisfies macOS's launch requirements without requiring an Apple
-  Developer Program membership. The `.pkg` is **unsigned**. Neither is
-  Apple-notarised.
-- **Why that's OK for this use case**: this is an internal tool distributed
-  to known coworkers via a known GitHub repository. Users verify
-  authenticity out-of-band (you pointed them at this repo). In exchange for
-  the "right-click → Open once per install" friction, you skip the $99/year
-  Apple Developer Program fee and the 5-10 minute notarise step per release.
+- **Code signing**: signed with a **Developer ID Application** certificate
+  (`Developer ID Application: Martin Razvan Politic (PA8H58YHD6)`), so
+  Gatekeeper accepts the binary as coming from an Apple-verified developer.
+- **Notarization**: every release is submitted to Apple's notary service via
+  `xcrun notarytool` and the returned ticket is **stapled** to the `.app`,
+  so Gatekeeper can validate it offline — no "is damaged" / "unidentified
+  developer" dialogs, no System Settings trip.
 - **Entitlements** (`HarvestPlus.entitlements`):
   - `com.apple.security.network.client` — Harvest API + update checks.
   - `com.apple.security.personal-information.calendars` — EventKit.
@@ -290,7 +292,7 @@ For the full release procedure, see [`RELEASING.md`](./RELEASING.md). The
 short version:
 
 ```bash
-./Scripts/build.sh --clean       # xcodebuild archive (ad-hoc) → ditto .app.zip
+./Scripts/build.sh --clean       # archive → sign → notarize → staple → zip
 gh release create v<v> \
     build/HarvestPlus.app.zip build/HarvestPlus-<v>.app.zip \
     --title "HarvestPlus <v>" --notes-file CHANGELOG.md

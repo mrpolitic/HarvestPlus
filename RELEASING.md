@@ -3,14 +3,16 @@
 End-to-end procedure for shipping a new version of HarvestPlus to coworkers.
 The output is **one file**: `HarvestPlus.app.zip`, uploaded to GitHub Releases.
 Coworkers install with a single Terminal command; the installed app
-auto-detects future releases and copies the same install command to the
-clipboard on demand.
+auto-detects future releases and silently installs them on the next daily
+check.
 
-This flow deliberately avoids the Apple Developer Program ($99/year). The
-trade-off: the `.app` inside the zip is ad-hoc signed, not notarised. We
-sidestep Gatekeeper by distributing via `curl | bash` — `curl` doesn't set
-`com.apple.quarantine` on downloaded files, and the installer strips any
-residual xattr before launch. End user sees no Gatekeeper dialog at all.
+Every build is **signed with a Developer ID Application certificate and
+notarized by Apple**, with the notarization ticket stapled to the `.app`.
+Gatekeeper accepts the app offline — no "is damaged" dialog, no
+"unidentified developer" wall, no System Settings → Privacy & Security trip
+on install or launch. The `curl | bash` path is kept because it's a one-line
+install and matches what the in-app auto-updater does, not because it's
+needed to dodge Gatekeeper.
 
 ---
 
@@ -18,7 +20,7 @@ residual xattr before launch. End user sees no Gatekeeper dialog at all.
 
 ```bash
 # 1. Bump version in Xcode (MARKETING_VERSION), update CHANGELOG.md, commit.
-# 2. Build the zip
+# 2. Build, sign, notarize, staple, zip
 ./Scripts/build.sh --clean
 
 # 3. Tag + publish
@@ -31,20 +33,37 @@ gh release create v<version> \
 
 ---
 
-## Prerequisites (one-time)
+## Prerequisites (one-time setup on the release machine)
 
-1. **Xcode** with any valid Apple ID signed in
-   (Xcode → Settings → Accounts → `+ Add Apple ID…`). A free Apple ID is
-   fine — we don't use the paid Developer Program.
-2. **`xcode-select`** must point at the full Xcode app, not the command-line
-   tools:
+1. **Xcode** with the Apple ID tied to the paid Developer Program signed in
+   (Xcode → Settings → Accounts).
+2. **`xcode-select`** must point at the full Xcode app:
    ```bash
    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
    xcodebuild -version   # → "Xcode <major>.<minor>"
    ```
-3. **GitHub CLI** (`gh auth login`) — used by the release command.
+3. **Developer ID Application certificate** installed in the login keychain.
+   Verify with:
+   ```bash
+   security find-identity -v -p codesigning | grep "Developer ID Application"
+   ```
+   Should show one entry like
+   `Developer ID Application: Martin Razvan Politic (PA8H58YHD6)`.
+   If it isn't there: Xcode → Settings → Accounts → click the account →
+   **Manage Certificates** → **+** → "Developer ID Application".
+4. **`notarytool` profile** stored in the keychain under the name
+   `AC_NOTARY`. Created once with:
+   ```bash
+   xcrun notarytool store-credentials AC_NOTARY \
+       --apple-id  <your-apple-id> \
+       --team-id   PA8H58YHD6 \
+       --password  <app-specific-password-from-appleid.apple.com>
+   ```
+   The app-specific password lives in Apple's keychain; `build.sh` never
+   sees it directly, it just references the profile name.
+5. **GitHub CLI** (`gh auth login`) — used by the release command.
 
-That's it. No certificates, no notarytool credentials, no keychain setup.
+`build.sh` will fail fast at preflight if any of #3 or #4 is missing.
 
 ---
 
@@ -63,7 +82,7 @@ Commit: `git commit -am "Bump version to 1.1.0"`.
 
 ---
 
-## Step 2 — Build the zip
+## Step 2 — Build, sign, notarize, staple
 
 ```bash
 ./Scripts/build.sh --clean
@@ -71,18 +90,32 @@ Commit: `git commit -am "Bump version to 1.1.0"`.
 
 Pipeline:
 
-1. `xcodebuild archive` with `CODE_SIGN_IDENTITY=-` (ad-hoc)
-   → `build/HarvestPlus.xcarchive`
-2. Pulls `.app` directly from the archive's `Products/Applications/` —
-   no `xcodebuild -exportArchive` step (that one needs a Developer ID).
-3. `ditto -c -k --sequesterRsrc --keepParent` zips the `.app` →
-   - `build/HarvestPlus.app.zip` (fixed name — the installer fetches this)
-   - `build/HarvestPlus-<version>.app.zip` (versioned copy, for humans)
+1. **Archive** — `xcodebuild archive` signed with the Developer ID
+   Application identity, hardened runtime enabled, the entitlements in
+   `HarvestPlus/HarvestPlus.entitlements` baked in. Output:
+   `build/HarvestPlus.xcarchive`.
+2. **Verify** — `codesign --verify --deep --strict` + a check that
+   `flags=0x10000(runtime)` is set on the embedded binary. Notary would
+   reject anything missing the hardened runtime; we fail fast.
+3. **Notarize** — `ditto -c -k --sequesterRsrc --keepParent` zips the
+   `.app`, then `xcrun notarytool submit … --wait` ships it to Apple's
+   notary service and blocks until they reply. Typically 1–3 minutes. If
+   rejected, `build.sh` fetches the detailed log via `notarytool log` and
+   prints Apple's reason.
+4. **Staple** — `xcrun stapler staple` attaches the notarization ticket to
+   the `.app` so Gatekeeper can validate it offline (no notary roundtrip
+   on every coworker's launch).
+5. **Gatekeeper assess** — `spctl --assess --type execute` confirms the
+   stapled bundle is accepted.
+6. **Final zip** — `ditto -c -k --sequesterRsrc --keepParent` produces the
+   two release assets:
+   - `build/HarvestPlus.app.zip` (fixed name — `install.sh` and the
+     in-app updater fetch exactly this filename from
+     `/releases/latest/download/`)
+   - `build/HarvestPlus-<version>.app.zip` (versioned copy for humans
+     browsing the Releases page)
 
-Output summary is printed at the end of the run.
-
-The script does `codesign --verify --deep --strict` on the built `.app` as
-a sanity check — ad-hoc signatures pass that just fine.
+Output summary is printed at the end.
 
 ---
 
@@ -124,20 +157,23 @@ curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/
 ```
 
 Expected: the script prints progress, launches the app, a menu-bar icon
-appears. No Gatekeeper dialog, no System Settings visit.
+appears. No Gatekeeper dialog, no System Settings visit, no password
+prompt.
 
-### Verifying the in-app updater
+### Verifying the in-app auto-updater
 
 On a Mac that already has a previous version installed:
 
-1. Menu-bar → Settings → **General** → **About** → **Check for Updates**.
-2. You should see "Version `<new>` is available" with the release notes.
-3. Click **Copy Install Command** — the `curl | bash` one-liner is copied
-   to the clipboard.
-4. Open Terminal, paste, hit Return. The running HarvestPlus quits, the
-   new version is installed in place, and it relaunches automatically.
+1. Wait for the daily check to fire (or trigger it manually via Settings →
+   **General** → **About** → **Check for Updates**).
+2. The "Version `<new>` is available" banner appears for ~2 s in Settings.
+3. Terminal flashes open, runs the install script, quits the old binary,
+   relaunches the new one. The user doesn't have to click anything.
+4. If you want to verify the manual-click path still works, force-quit the
+   app before the 2 s timer fires and click **Install Update** in Settings
+   on the new launch.
 
-Automatic checks run **once per 24h** on launch. The interval is
+Automatic checks run **once per 24 h** on launch. The interval is
 `UpdateChecker.autoCheckInterval` if you need to tune it.
 
 ---
@@ -159,10 +195,11 @@ Automatic checks run **once per 24h** on launch. The interval is
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `xcodebuild: error: tool 'xcodebuild' requires Xcode` | `xcode-select` pointed at CLI tools | `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` |
-| `xcodebuild archive` fails with a signing error | Xcode trying to auto-sign against a team you don't have | The script passes `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-` — check you haven't re-enabled "Automatically manage signing" in Xcode and saved a team into the project |
+| `build.sh` dies at preflight saying "signing identity not found" | Developer ID Application cert not in login keychain | See Prerequisite #3 above |
+| `build.sh` dies at preflight saying "notarytool profile 'AC_NOTARY' not configured" | Notarytool credentials not stored | See Prerequisite #4 above |
+| Notarization rejected | Usually a hardened-runtime / entitlement issue | `build.sh` automatically fetches and prints Apple's detailed log via `notarytool log`. Most common cause: a sandbox-incompatible entitlement was added to `HarvestPlus.entitlements`. |
 | `install.sh` says "Download failed" | Release has no `HarvestPlus.app.zip` asset (or the release is a draft/prerelease) | Check the latest release on GitHub. The asset filename must be exactly `HarvestPlus.app.zip`. |
 | App launches but immediately quits on a coworker's Mac | Architecture mismatch (e.g. Intel Mac, binary is Apple Silicon only) | Rebuild with `-arch x86_64 -arch arm64` or set `ONLY_ACTIVE_ARCH=NO` in Xcode Release config |
-| Coworker gets a Gatekeeper dialog anyway | They downloaded the zip via a browser instead of `curl | bash` | Browsers tag downloads with `com.apple.quarantine`. Either re-install via the Terminal command, or `xattr -cr /Applications/HarvestPlus.app` once. |
 | Updater says "not configured" | `UpdateChecker.repository` still set to placeholder | Edit `HarvestPlus/Updates/UpdateChecker.swift`, replace `YOUR_GITHUB_USER/HarvestPlus` with your real `owner/repo` |
 
 ---
@@ -171,36 +208,20 @@ Automatic checks run **once per 24h** on launch. The interval is
 
 ```
 Scripts/
-  build.sh             Archive → ditto .app.zip pipeline (ad-hoc)
+  build.sh             archive → sign → notarize → staple → zip pipeline
   install.sh           curl | bash installer run by coworkers
-  postinstall.sh       (unused — kept for future signed .pkg path)
-  ExportOptions.plist  (unused — kept for future Developer ID path)
+
+HarvestPlus/
+  HarvestPlus.entitlements   sandbox + apple-events + calendar + …
+  Info.plist                 NSAppleEventsUsageDescription etc.
 
 HarvestPlus/Updates/
-  UpdateChecker.swift  Polls GitHub Releases, exposes install command
+  UpdateChecker.swift  polls GitHub Releases, auto-installs new versions
   UpdateSection.swift  "About" row in General Settings
 
 build/                 (git-ignored) build output
   HarvestPlus.xcarchive
   HarvestPlus.app.zip                  ← ship this (fixed name)
   HarvestPlus-<version>.app.zip        ← ship this (human-friendly copy)
+  archive.log / notarize.log / staple.log    diagnostic logs
 ```
-
----
-
-## Upgrading to the signed/notarised path later
-
-If you ever do join the Apple Developer Program, the clean upgrade path is:
-
-1. Set `CODE_SIGN_IDENTITY` to your Developer ID Application cert name
-   when running `build.sh`.
-2. Re-add a `xcodebuild -exportArchive` step using
-   `Scripts/ExportOptions.plist` (kept in the repo for this reason).
-3. Either stick with the `.app.zip` distribution (just notarise the zip) or
-   swap to `pkgbuild` + notarytool, reinstating `Scripts/postinstall.sh`.
-4. Drop the `xattr -cr` step in `install.sh` — notarised binaries don't
-   need it.
-
-No Swift code changes required; the updater and the in-app experience stay
-identical. Coworkers could then double-click the zip/pkg instead of running
-a Terminal command, but the `curl | bash` path keeps working either way.

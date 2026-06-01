@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Computes non-working days — Danish public holidays (including the Easter
+//  math), weekends, and the user's custom dates — behind a per-year cache.
+//  The overtime calculator uses it to zero out targets on days off.
+//
 
 import Foundation
 

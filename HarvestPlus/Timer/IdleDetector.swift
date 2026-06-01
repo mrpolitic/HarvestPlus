@@ -4,6 +4,10 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Polls the system HID idle time (IOKit) while a timer is running and fires
+//  a callback once the user has been idle past the threshold, so the banner
+//  can offer to stop the timer and subtract the idle stretch.
+//
 
 import Foundation
 import IOKit
@@ -34,12 +38,15 @@ final class IdleDetector: ObservableObject {
     func startMonitoring() {
         guard checkTimer == nil else { return }
 
-        // Check every 30 seconds
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        // Check every 30 seconds. Add to RunLoop.main in .common modes so it keeps
+        // firing while the popover or a modal/tracking loop is open.
+        let timer = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkIdleState()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        checkTimer = timer
     }
 
     func stopMonitoring() {

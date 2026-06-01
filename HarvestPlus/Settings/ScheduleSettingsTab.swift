@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  Work-schedule settings: start / end times, the per-weekday hour targets,
+//  and lunch duration / window.
+//
 
 import SwiftUI
 
@@ -74,6 +77,15 @@ struct ScheduleSettingsTab: View {
         targetMon + targetTue + targetWed + targetThu + targetFri + targetSat + targetSun
     }
 
+    /// Round a target to the nearest 0.5h and clamp to 0...10 — the range the
+    /// picker offers — so the Picker's selection always matches an option tag.
+    /// Without this an off-grid stored value (hand-edited default, a future
+    /// schedule import) would leave the picker rendering blank.
+    private func snapTarget(_ value: Double) -> Double {
+        let clamped = min(max(value, 0), 10)
+        return (clamped * 2).rounded() / 2
+    }
+
     // MARK: - Persistence
 
     private func loadSettings() {
@@ -88,13 +100,13 @@ struct ScheduleSettingsTab: View {
         let endM = ud.object(forKey: "workEndMinute") as? Int ?? 0
         workEnd = cal.date(from: DateComponents(hour: endH, minute: endM)) ?? workEnd
 
-        targetMon = ud.object(forKey: "targetMon") as? Double ?? 7.5
-        targetTue = ud.object(forKey: "targetTue") as? Double ?? 7.5
-        targetWed = ud.object(forKey: "targetWed") as? Double ?? 7.5
-        targetThu = ud.object(forKey: "targetThu") as? Double ?? 7.5
-        targetFri = ud.object(forKey: "targetFri") as? Double ?? 7.0
-        targetSat = ud.object(forKey: "targetSat") as? Double ?? 0.0
-        targetSun = ud.object(forKey: "targetSun") as? Double ?? 0.0
+        targetMon = snapTarget(ud.object(forKey: "targetMon") as? Double ?? 7.5)
+        targetTue = snapTarget(ud.object(forKey: "targetTue") as? Double ?? 7.5)
+        targetWed = snapTarget(ud.object(forKey: "targetWed") as? Double ?? 7.5)
+        targetThu = snapTarget(ud.object(forKey: "targetThu") as? Double ?? 7.5)
+        targetFri = snapTarget(ud.object(forKey: "targetFri") as? Double ?? 7.0)
+        targetSat = snapTarget(ud.object(forKey: "targetSat") as? Double ?? 0.0)
+        targetSun = snapTarget(ud.object(forKey: "targetSun") as? Double ?? 0.0)
     }
 
     private func saveSettings() {

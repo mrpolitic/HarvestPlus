@@ -4,6 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
+//  General settings: launch at login, the Harvest polling interval, and the
+//  Liquid Glass appearance toggle.
+//
 
 import SwiftUI
 import ServiceManagement
