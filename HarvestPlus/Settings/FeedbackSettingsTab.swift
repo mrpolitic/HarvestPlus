@@ -4,7 +4,7 @@
 //
 //  In-app feedback form. Submissions are sent to a Web3Forms endpoint that
 //  forwards them to the maintainer's inbox. The maintainer's email never
-//  appears in the app bundle — only the public Web3Forms access key, which
+//  appears in the app bundle – only the public Web3Forms access key, which
 //  is rate-limited on the service side.
 //
 //  Free-tier limits at time of writing:
@@ -14,7 +14,7 @@
 //  How to rotate the access key:
 //    1. Generate a new key at https://web3forms.com
 //    2. Replace FeedbackService.accessKey below
-//    3. Ship a new build — the old key keeps working for users on older
+//    3. Ship a new build – the old key keeps working for users on older
 //       versions until their app updates, so no submission is lost.
 //
 
@@ -97,7 +97,7 @@ struct FeedbackSettingsTab: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            TextField("Optional — e.g. \"Crash when stopping a timer\"", text: $subject)
+            TextField("Optional – e.g. \"Crash when stopping a timer\"", text: $subject)
                 .textFieldStyle(.roundedBorder)
         }
     }
@@ -111,7 +111,7 @@ struct FeedbackSettingsTab: View {
                 .foregroundStyle(.secondary)
 
             // TextField with axis: .vertical gives us multi-line input
-            // *and* AppKit-rendered placeholder — the placeholder sits at
+            // *and* AppKit-rendered placeholder – the placeholder sits at
             // the exact text origin, no overlay-alignment guesswork. The
             // line limit range gives a stable initial height (7 lines)
             // that grows to a max of 12 lines before scrolling.
@@ -129,7 +129,7 @@ struct FeedbackSettingsTab: View {
         case .feature:
             return "Describe the feature, who it would help, and what problem it solves."
         case .general:
-            return "Anything you'd like to share — workflow ideas, kind words, complaints, etc."
+            return "Anything you'd like to share – workflow ideas, kind words, complaints, etc."
         }
     }
 

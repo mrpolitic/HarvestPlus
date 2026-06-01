@@ -2,14 +2,14 @@
 //  PopoverView.swift
 //  HarvestPlus
 //
-//  Menu bar popover. HarvestPlus is a companion to Harvest — it mirrors the
+//  Menu bar popover. HarvestPlus is a companion to Harvest – it mirrors the
 //  timer state and lets you stop a running timer, log meetings, and review
-//  your day — but it does NOT create new time entries from scratch. For that,
+//  your day – but it does NOT create new time entries from scratch. For that,
 //  users open Harvest itself.
 //
 //  Layout:
 //    - Header (Today + date + running pill)
-//    - Today hero — primary action: tap to open the Dashboard (⌘D)
+//    - Today hero – primary action: tap to open the Dashboard (⌘D)
 //    - Active timer card (with stop control) OR an "Open Harvest" CTA when idle
 //    - Logged today (read-only, collapsible)
 //    - Meetings today (clickable → log as time entry, the one allowed creation path)
@@ -188,7 +188,7 @@ struct PopoverView: View {
 
                     Spacer()
 
-                    // Primary CTA label — matches a standard button size so the hero
+                    // Primary CTA label – matches a standard button size so the hero
                     // reads unambiguously as "click here to see the full report".
                     HStack(spacing: 4) {
                         Text("View Dashboard")
@@ -317,7 +317,7 @@ struct PopoverView: View {
         }
     }
 
-    /// Compact card shown while a timer is running in Harvest — lets the user see it and stop it here.
+    /// Compact card shown while a timer is running in Harvest – lets the user see it and stop it here.
     private func runningTimerCard(_ entry: TimeEntry) -> some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 1.5)
@@ -360,7 +360,7 @@ struct PopoverView: View {
         .harvestSurface(cornerRadius: AppRadius.sm)
     }
 
-    /// Idle state — HarvestPlus doesn't create entries. Nudge the user to Harvest for that.
+    /// Idle state – HarvestPlus doesn't create entries. Nudge the user to Harvest for that.
     private var idleOpenHarvestCard: some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 1.5)
@@ -378,7 +378,7 @@ struct PopoverView: View {
 
             Spacer()
 
-            // Plain text link — secondary, utility-style. The external-link arrow
+            // Plain text link – secondary, utility-style. The external-link arrow
             // (vs the hero's drill-in chevron) signals this leaves HarvestPlus.
             Button {
                 Self.openHarvestApp()
@@ -406,7 +406,7 @@ struct PopoverView: View {
     ///
     /// Both the classic (2.x) and redesigned (3.x) apps share the bundle id
     /// `com.getharvest.harvestxapp`, so we can't lean on LaunchServices'
-    /// single "preferred" pick — it favors `/Applications` and can resolve
+    /// single "preferred" pick – it favors `/Applications` and can resolve
     /// to a stale old copy. Instead we enumerate every installed copy and
     /// open the highest version. `openApplication` launches-or-foregrounds
     /// reliably, including the new Electron app's window, which both
@@ -650,7 +650,7 @@ struct PopoverView: View {
                     Image(systemName: "sparkles")
                         .font(.caption2)
                         .foregroundStyle(AppColor.harvestOrange)
-                        .help("Project remembered — click to save quickly")
+                        .help("Project remembered – click to save quickly")
                 }
 
                 Spacer()
@@ -689,7 +689,7 @@ struct PopoverView: View {
             .keyboardShortcut(",", modifiers: .command)
             .help("Open settings (⌘,)")
             // SettingsLink opens the scene but doesn't activate a LSUIElement
-            // app — without this, the window lands behind Xcode/Finder/etc.
+            // app – without this, the window lands behind Xcode/Finder/etc.
             .simultaneousGesture(TapGesture().onEnded { focusWindow(id: "settings") })
 
             Spacer()
@@ -711,15 +711,15 @@ struct PopoverView: View {
 
     /// Bring a window opened from the menu-bar popover to the very front.
     /// HarvestPlus is `LSUIElement = YES`, so `openWindow(id:)` / `SettingsLink`
-    /// create the window but leave this accessory app in the background — the
+    /// create the window but leave this accessory app in the background – the
     /// new window then lands behind whatever was frontmost.
     ///
     /// We activate the app and explicitly raise the matching window. This runs
     /// on the next runloop tick because, at the moment the opening call returns,
-    /// the window doesn't exist yet — there'd be nothing to raise. Matching is by
+    /// the window doesn't exist yet – there'd be nothing to raise. Matching is by
     /// the scene `id` (SwiftUI sets it as the `NSWindow` identifier), with a
-    /// case-insensitive `contains` fallback so the Settings window — whose
-    /// identifier is `com_apple_SwiftUI_Settings_window` — is still found via
+    /// case-insensitive `contains` fallback so the Settings window – whose
+    /// identifier is `com_apple_SwiftUI_Settings_window` – is still found via
     /// "settings".
     private func focusWindow(id: String) {
         NSApp.activate(ignoringOtherApps: true)

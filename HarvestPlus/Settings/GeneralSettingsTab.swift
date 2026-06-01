@@ -19,7 +19,7 @@ struct GeneralSettingsTab: View {
     @State private var launchAtLogin: Bool = false
     @State private var pollingInterval: Double = 60
 
-    // Liquid Glass on by default — it's the platform's native material on
+    // Liquid Glass on by default – it's the platform's native material on
     // macOS 26 and what every other Apple app opts into. The toggle exists
     // for users on lower-end hardware or those who simply prefer the flat
     // look; it's read by `HarvestSurfaceModifier` via @AppStorage so every
@@ -30,7 +30,7 @@ struct GeneralSettingsTab: View {
     // you start/stop a timer elsewhere, but doesn't hammer the Harvest API or
     // your battery. 10s is offered for power users; going lower buys nothing
     // because the running-timer state rarely changes on human timescales.
-    // 5 minutes was dropped — anything slower than 2 minutes feels broken.
+    // 5 minutes was dropped – anything slower than 2 minutes feels broken.
     private let pollingOptions: [Double] = [10, 15, 30, 60, 120]
 
     var body: some View {
@@ -60,7 +60,7 @@ struct GeneralSettingsTab: View {
                     appState.timerMonitor?.restartPolling(interval: newValue)
                 }
 
-                Text("How often to check Harvest for timer updates. 15–30s is the sweet spot — faster feels live when you start a timer in Harvest itself, slower saves battery on the go.")
+                Text("How often to check Harvest for timer updates. 15–30s is the sweet spot – faster feels live when you start a timer in Harvest itself, slower saves battery on the go.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -68,7 +68,7 @@ struct GeneralSettingsTab: View {
             Section("Appearance") {
                 Toggle("Liquid Glass", isOn: $liquidGlassEnabled)
 
-                Text("Apple's translucent material. Gives cards, the banner, and the popover a reflective, frosted look. Turn off for a flat, opaque appearance — slightly lighter on the GPU and a bit easier to read on older displays.")
+                Text("Apple's translucent material. Gives cards, the banner, and the popover a reflective, frosted look. Turn off for a flat, opaque appearance – slightly lighter on the GPU and a bit easier to read on older displays.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -100,7 +100,7 @@ struct GeneralSettingsTab: View {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            // Silently fail — not critical
+            // Silently fail – not critical
         }
     }
 }

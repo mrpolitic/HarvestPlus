@@ -93,7 +93,7 @@ struct OvertimeCalculator {
         let expected = isNonWorking ? 0 : settings.workSchedule.dailyTarget(for: date)
 
         // Sum all hours, extrapolating the running timer's live elapsed
-        // from `polledAt` (see TimeEntry.liveHours — fixes the 2× bug).
+        // from `polledAt` (see TimeEntry.liveHours – fixes the 2× bug).
         let now = Date()
         var totalHours: Double = 0
         var holidayHours: Double = 0
@@ -196,7 +196,7 @@ struct OvertimeCalculator {
         let year = cal.component(.yearForWeekOfYear, from: date)
 
         // Get Monday of this week. If calendar math fails on an exotic input,
-        // fall back to `startOfDay(for: date)` — caller still gets a valid
+        // fall back to `startOfDay(for: date)` – caller still gets a valid
         // WeekSummary instead of a crash.
         let monday = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date))
             ?? cal.startOfDay(for: date)
@@ -234,7 +234,7 @@ struct OvertimeCalculator {
 
         // Hard-cap the loop. Normally the `<=` check terminates, but if
         // `byAdding:` ever returned the same date (bad calendar config) we'd
-        // spin forever. 520 weeks = ~10 years — well above any real range.
+        // spin forever. 520 weeks = ~10 years – well above any real range.
         var safetyCounter = 0
         while currentMonday <= endDate && safetyCounter < 520 {
             let summary = weekSummary(containing: currentMonday, entries: entries, settings: settings, polledAt: polledAt)
@@ -365,7 +365,7 @@ struct OvertimeCalculator {
             let yearForWeek = key / 100
             let weekNum = key % 100
             // If calendar math fails (pathological ISO week key), fall back to
-            // the first day we actually have — better than dropping the week.
+            // the first day we actually have – better than dropping the week.
             let monday = cal.date(from: DateComponents(weekOfYear: weekNum, yearForWeekOfYear: yearForWeek))
                 ?? sortedDays.first?.date
                 ?? Date()
@@ -391,7 +391,7 @@ struct OvertimeCalculator {
         f.locale = Locale(identifier: "en_US_POSIX")
         // Pin to the local time zone (the default, made explicit): `spent_date`
         // is a calendar day, and every other parser of it (DashboardMetrics,
-        // day/week grouping) compares against Calendar.current — they must agree.
+        // day/week grouping) compares against Calendar.current – they must agree.
         f.timeZone = .current
         return f
     }()

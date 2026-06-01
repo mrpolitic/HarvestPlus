@@ -61,7 +61,7 @@ extension View {
     /// The app's canonical container background.
     ///
     /// - When the user has Liquid Glass enabled (default), applies
-    ///   `.glassEffect(in:)` — the macOS 26 translucent, reflective material.
+    ///   `.glassEffect(in:)` – the macOS 26 translucent, reflective material.
     /// - When disabled, falls back to a flat `controlBackgroundColor` fill
     ///   at the same corner radius.
     ///
@@ -78,7 +78,7 @@ extension View {
     }
 
     /// A subtle elevation shadow appropriate for floating panels (banner, etc.)
-    /// Skipped when Liquid Glass is on — glass already conveys elevation.
+    /// Skipped when Liquid Glass is on – glass already conveys elevation.
     func harvestFloatingShadow() -> some View {
         modifier(HarvestFloatingShadowModifier())
     }
@@ -86,7 +86,7 @@ extension View {
 
 struct HarvestSurfaceModifier: ViewModifier {
     // @AppStorage so any view picks up toggle changes without needing AppState
-    // in its environment — matters for NSHostingView-hosted views like the
+    // in its environment – matters for NSHostingView-hosted views like the
     // banner, which don't inherit SwiftUI environment.
     @AppStorage("liquidGlassEnabled") private var liquidGlassEnabled: Bool = true
 

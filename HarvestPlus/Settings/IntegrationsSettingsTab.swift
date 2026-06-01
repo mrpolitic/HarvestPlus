@@ -64,7 +64,7 @@ struct IntegrationsSettingsTab: View {
                         .imageScale(.small)
                         .padding(.top, 1)
 
-                    Text("At [id.getharvest.com/developers](https://id.getharvest.com/developers), use the **Personal access tokens** section — not OAuth2 applications.")
+                    Text("At [id.getharvest.com/developers](https://id.getharvest.com/developers), use the **Personal access tokens** section – not OAuth2 applications.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -300,7 +300,7 @@ struct IntegrationsSettingsTab: View {
     // MARK: - Actions
 
     private func loadCredentials() {
-        // Read from the in-memory cache on AppState — avoids a keychain ACL
+        // Read from the in-memory cache on AppState – avoids a keychain ACL
         // check (and the password prompt it can trigger) on every tab appear.
         // AppState loads from the keychain exactly once at launch and keeps
         // the values in memory for the lifetime of the app.
@@ -309,7 +309,7 @@ struct IntegrationsSettingsTab: View {
     }
 
     private func saveCredentials() {
-        // Trim — pasted tokens/account ids routinely carry a trailing newline or
+        // Trim – pasted tokens/account ids routinely carry a trailing newline or
         // stray spaces, which would otherwise be saved verbatim and produce a
         // baffling 401 later.
         let cleanAccountId = accountId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -324,7 +324,7 @@ struct IntegrationsSettingsTab: View {
 
         do {
             // Save the token FIRST. If it throws, the stored account id is still
-            // the old one — so we never end up with a new account id paired to a
+            // the old one – so we never end up with a new account id paired to a
             // stale/absent token (which would build a broken client on next launch).
             try KeychainHelper.save(key: KeychainKey.harvestToken, string: cleanToken)
             try KeychainHelper.save(key: KeychainKey.harvestAccountId, string: cleanAccountId)

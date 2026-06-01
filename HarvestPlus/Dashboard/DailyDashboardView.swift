@@ -70,7 +70,7 @@ struct DailyDashboardView: View {
             date: previousDate,
             entries: previousDayEntries,
             settings: appState.settings
-            // No polledAt — previous-day entries are historical; nothing is running there.
+            // No polledAt – previous-day entries are historical; nothing is running there.
         )
     }
 
@@ -96,7 +96,7 @@ struct DailyDashboardView: View {
                 // Date navigation
                 dateNavigation
 
-                // Smart Insights — shown when there are any
+                // Smart Insights – shown when there are any
                 SmartInsightsCard(insights: dailyInsights)
 
                 // Progress + Stats row
@@ -109,7 +109,7 @@ struct DailyDashboardView: View {
                 // Project mix (stacked bar + per-project list)
                 dayCompositionSection
 
-                // Project trends — only when we have a previous-day baseline
+                // Project trends – only when we have a previous-day baseline
                 if !previousProjects.isEmpty || !projects.isEmpty {
                     projectTrendsSection
                 }
@@ -221,7 +221,7 @@ struct DailyDashboardView: View {
             // New activity after an idle day
             results.append(DashboardInsight(
                 icon: "sparkles",
-                text: "Fresh start — nothing logged yesterday",
+                text: "Fresh start – nothing logged yesterday",
                 accent: AppColor.harvestOrange
             ))
         }
@@ -243,7 +243,7 @@ struct DailyDashboardView: View {
                 // Pure meeting day with no logged work
                 results.append(DashboardInsight(
                     icon: "person.2.fill",
-                    text: "\(meetings.count) meeting\(meetings.count == 1 ? "" : "s") scheduled — no hours logged yet",
+                    text: "\(meetings.count) meeting\(meetings.count == 1 ? "" : "s") scheduled – no hours logged yet",
                     accent: AppColor.meetingBlue
                 ))
             }
@@ -255,7 +255,7 @@ struct DailyDashboardView: View {
             if share > 60 {
                 results.append(DashboardInsight(
                     icon: "target",
-                    text: "Deep-focus day — \(share)% on \(topProject.name)",
+                    text: "Deep-focus day – \(share)% on \(topProject.name)",
                     accent: ProjectPalette.color(for: topProject.id)
                 ))
             } else if projects.count >= 3 {
@@ -271,7 +271,7 @@ struct DailyDashboardView: View {
         if daySummary.holidayHours > 0 {
             results.append(DashboardInsight(
                 icon: "sun.max.fill",
-                text: "Holiday hours logged — \(TimeFormat.clock(daySummary.holidayHours))",
+                text: "Holiday hours logged – \(TimeFormat.clock(daySummary.holidayHours))",
                 accent: Color(red: 0.61, green: 0.35, blue: 0.71)
             ))
         }
@@ -295,7 +295,7 @@ struct DailyDashboardView: View {
                 .stroke(Color(.separatorColor).opacity(0.3), lineWidth: 12)
 
             if showProgress {
-                // Progress ring — orange up to 100%
+                // Progress ring – orange up to 100%
                 Circle()
                     .trim(from: 0, to: progressClamped)
                     .stroke(
@@ -305,7 +305,7 @@ struct DailyDashboardView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.easeOut(duration: 0.5), value: progressClamped)
 
-                // Overtime spillover ring — red beyond 100%
+                // Overtime spillover ring – red beyond 100%
                 if progress > 1.0 {
                     Circle()
                         .trim(from: 0, to: progress - 1.0)
@@ -321,7 +321,7 @@ struct DailyDashboardView: View {
                     .stroke(Color(.separatorColor).opacity(0.15), lineWidth: 12)
             }
 
-            // Center text — hero stat: hours logged today
+            // Center text – hero stat: hours logged today
             VStack(spacing: 2) {
                 Text(TimeFormat.clock(daySummary.actual))
                     .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -331,7 +331,7 @@ struct DailyDashboardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                // Overtime badge — only when there's a daily target set
+                // Overtime badge – only when there's a daily target set
                 if isOver {
                     Text("+\(TimeFormat.clock(daySummary.delta))")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -374,7 +374,7 @@ struct DailyDashboardView: View {
                 )
             }
 
-            // vs Yesterday — only if there's a baseline
+            // vs Yesterday – only if there's a baseline
             if previousDaySummary.actual > 0.01 {
                 vsYesterdayRow
             }
@@ -488,7 +488,7 @@ struct DailyDashboardView: View {
                     Spacer()
                 }
             } else {
-                // Stacked bar — reuses the shared ProjectCompositionBar
+                // Stacked bar – reuses the shared ProjectCompositionBar
                 ProjectCompositionBar(projects: projects, height: 32, showEmptyState: false)
             }
         }
@@ -582,7 +582,7 @@ struct DailyDashboardView: View {
                     Image(systemName: "sparkles")
                         .font(.caption)
                         .foregroundStyle(AppColor.harvestOrange)
-                        .help("Project remembered — click to save quickly")
+                        .help("Project remembered – click to save quickly")
                 }
 
                 Text("\(meeting.durationMinutes) min")
@@ -643,7 +643,7 @@ struct DailyDashboardView: View {
         let prevStart = cal.date(byAdding: .day, value: -1, to: start) ?? start
         let prevEnd = start
 
-        // Calendar events are local (EventKit) — no async needed
+        // Calendar events are local (EventKit) – no async needed
         meetings = appState.calendarService.getEvents(for: selectedDate)
 
         Task {

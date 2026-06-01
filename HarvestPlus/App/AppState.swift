@@ -44,7 +44,7 @@ final class AppState: ObservableObject {
     @Published var actionError: String? = nil
 
     /// Guards the timer mutation actions (start / stop / stop-and-subtract) so a
-    /// double-click — or a manual Stop racing the auto-stop-on-sleep — can't fire
+    /// double-click – or a manual Stop racing the auto-stop-on-sleep – can't fire
     /// two Harvest writes for the same entry (the second would 422 and surface a
     /// spurious error). Set/cleared on the main actor around the network round-trip.
     private var isApplyingTimerAction = false
@@ -73,7 +73,7 @@ final class AppState: ObservableObject {
         loadPersistedSettings()
 
         // Try to load saved credentials on launch. We deliberately do NOT
-        // re-save them here — the ACL was set the first time the items were
+        // re-save them here – the ACL was set the first time the items were
         // written, and with a stable Developer ID signature it stays valid
         // across all future builds. Re-saving on every launch was previously
         // triggering "change access permissions" password prompts because
@@ -96,7 +96,7 @@ final class AppState: ObservableObject {
             todayMeetings = calendarService.getEvents(for: Date())
         }
 
-        // Sparkle handles its own scheduling — the SPUUpdater inside
+        // Sparkle handles its own scheduling – the SPUUpdater inside
         // updateChecker was started in its initializer with
         // `startingUpdater: true`, so background checks are already armed
         // and will fire on Sparkle's `SUScheduledCheckInterval` (24h).
@@ -239,7 +239,7 @@ final class AppState: ObservableObject {
                 case .unauthorized:
                     isConnected = false
                 case .networkError:
-                    // Credentials are fine — we're just offline. Show it now
+                    // Credentials are fine – we're just offline. Show it now
                     // instead of waiting for the first scheduled poll.
                     timerState = .offline
                 default:
@@ -278,7 +278,7 @@ final class AppState: ObservableObject {
         return nil
     }
 
-    // MARK: - Export Data (non-reactive — does NOT trigger view re-renders)
+    // MARK: - Export Data (non-reactive – does NOT trigger view re-renders)
 
     /// Holds the current export period for the active dashboard tab.
     /// Intentionally NOT @Published so setting it doesn't cascade re-renders.
@@ -323,7 +323,7 @@ final class AppState: ObservableObject {
     /// Wall-clock time when the entries for this date range were last
     /// fetched from Harvest. Dashboards use this as `polledAt` for live-
     /// elapsed extrapolation so the running timer's contribution matches
-    /// `entry.hours` exactly — using the global `lastPolledAt` instead
+    /// `entry.hours` exactly – using the global `lastPolledAt` instead
     /// can be off by tens of seconds because that's updated by
     /// `TimerMonitor` on a different schedule than the dashboards' cache.
     /// Returns the global `lastPolledAt` as a fallback when nothing is
@@ -459,7 +459,7 @@ final class AppState: ObservableObject {
         settings.longTimerThreshold = (ud.object(forKey: "longTimerThreshold") as? Double ?? 3) * 3600
         settings.autoStopOnSleep = ud.bool(forKey: "autoStopOnSleep")
 
-        // EOD / EOW summary schedule — keys written by NotificationsSettingsTab.
+        // EOD / EOW summary schedule – keys written by NotificationsSettingsTab.
         // Without loading here, the scheduler falls back to 16:00 every app
         // launch until the user opens Settings (which re-syncs as a side effect).
         settings.eodSummaryEnabled = ud.object(forKey: "eodSummary") as? Bool ?? true

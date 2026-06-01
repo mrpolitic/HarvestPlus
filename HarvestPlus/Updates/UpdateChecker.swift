@@ -18,10 +18,10 @@
 //    SUFeedURL                          appcast.xml URL
 //    SUPublicEDKey                      public half of the EdDSA keypair
 //                                       (private key in the maintainer's keychain)
-//    SUEnableInstallerLauncherService   YES — required in sandbox mode
+//    SUEnableInstallerLauncherService   YES – required in sandbox mode
 //    SUEnableAutomaticChecks            YES
 //    SUScheduledCheckInterval           86400 (1 day)
-//    SUAutomaticallyUpdate              YES — download + install silently
+//    SUAutomaticallyUpdate              YES – download + install silently
 //
 //  `build.sh` signs each release zip with the private EdDSA key on the
 //  release machine and updates the appcast.xml entry. Sparkle on the
@@ -41,7 +41,7 @@ final class UpdateChecker: ObservableObject {
     /// is running before the user opens Settings for the first time.
     private let controller: SPUStandardUpdaterController
 
-    /// Mirror of `SPUUpdater.canCheckForUpdates` for SwiftUI binding —
+    /// Mirror of `SPUUpdater.canCheckForUpdates` for SwiftUI binding –
     /// flips to `false` while a check or download is in flight.
     @Published private(set) var canCheckForUpdates: Bool = false
 

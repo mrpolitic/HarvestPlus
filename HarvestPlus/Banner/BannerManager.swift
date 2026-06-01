@@ -36,12 +36,12 @@ final class BannerManager: ObservableObject {
     //   2) Stuck states: if the snooze Timer never fired (e.g. the system
     //      was asleep through the 15 min, or two Snooze clicks left a
     //      dangling Timer reference), `isSnoozed` could remain true
-    //      indefinitely — which is why "after a few skips it doesn't
+    //      indefinitely – which is why "after a few skips it doesn't
     //      appear anymore" happened.
     //
     // The fix is to drop both timers and the boolean, and represent each
     // mute as an absolute Date in the future. Date-based muting can't
-    // drift out of sync with reality — it naturally expires when wall-
+    // drift out of sync with reality – it naturally expires when wall-
     // clock passes the stored timestamp, no Timer to mis-fire or leak.
     // Both values persist in UserDefaults so a 15-min snooze or a "skip
     // for today" survives quit/relaunch.
@@ -108,7 +108,7 @@ final class BannerManager: ObservableObject {
     private func handleTimerStateChange(_ state: TimerState) {
         switch state {
         case .running:
-            // Timer started — cancel any pending nudge and hide the banner.
+            // Timer started – cancel any pending nudge and hide the banner.
             // DO NOT clear snoozedUntil / skippedUntil: those are explicit
             // absolute time windows the user chose, and a brief
             // running→stopped transition (or a polling re-emit of `.running`)
@@ -118,7 +118,7 @@ final class BannerManager: ObservableObject {
             hideBanner()
 
         case .stopped:
-            // Arm the nudge with the standard 30s grace period — enough time
+            // Arm the nudge with the standard 30s grace period – enough time
             // for the user to start a new timer before we prompt.
             scheduleNudge(after: 30)
 
@@ -134,8 +134,8 @@ final class BannerManager: ObservableObject {
     // The nudge should appear once all of these hold continuously: timer
     // stopped, within work hours, nudge enabled, and not muted (snooze /
     // skip-for-today). We model that with a single pending timer that, when
-    // it fires, either shows the banner or — if a *temporary* condition is
-    // blocking (an active snooze/skip, or we're outside work hours) —
+    // it fires, either shows the banner or – if a *temporary* condition is
+    // blocking (an active snooze/skip, or we're outside work hours) –
     // reschedules itself to re-check when that condition is likely to have
     // lifted. This keeps the nudge reliable regardless of the poll interval
     // and without depending on `@Published` re-emissions.
@@ -190,7 +190,7 @@ final class BannerManager: ObservableObject {
         guard let appState = appState else { return }
 
         // Per-mode width. The nudge is deliberately narrow so the view grows
-        // taller — it reads as a calm, square-ish prompt rather than a strip.
+        // taller – it reads as a calm, square-ish prompt rather than a strip.
         // The reactive modes get more width for their action rows.
         let bannerWidth = Self.preferredWidth(for: mode)
 
@@ -232,7 +232,7 @@ final class BannerManager: ObservableObject {
         let snoozeMins = Int(appState.settings.snoozeDuration / 60)
 
         // Pin width via SwiftUI so the view can calculate the height it needs
-        // given that width. No hard-coded min height — compact modes (nudge)
+        // given that width. No hard-coded min height – compact modes (nudge)
         // are free to settle into their natural square-ish proportions.
         let bannerView = BannerView(
             mode: mode,
@@ -324,7 +324,7 @@ final class BannerManager: ObservableObject {
 
     // MARK: - Sizing
 
-    /// Each mode has different content weight — nudge is minimal and wants a
+    /// Each mode has different content weight – nudge is minimal and wants a
     /// near-square footprint; the idle banner needs room for three buttons.
     private static func preferredWidth(for mode: BannerMode) -> CGFloat {
         let screenCap = (NSScreen.main?.frame.width ?? 1200) * 0.9

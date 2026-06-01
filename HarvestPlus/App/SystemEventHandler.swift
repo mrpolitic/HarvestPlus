@@ -32,7 +32,7 @@ final class SystemEventHandler: ObservableObject {
     // MARK: - System Event Observers
 
     private func observeSystemEvents() {
-        // Sleep — auto-stop timer
+        // Sleep – auto-stop timer
         NotificationCenter.default.publisher(for: .systemWillSleep)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -40,7 +40,7 @@ final class SystemEventHandler: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Wake — reset daily summary flag if the day rolled over
+        // Wake – reset daily summary flag if the day rolled over
         NotificationCenter.default.publisher(for: .systemDidWake)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -48,7 +48,7 @@ final class SystemEventHandler: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Screen lock — same as sleep for timer purposes
+        // Screen lock – same as sleep for timer purposes
         NotificationCenter.default.publisher(for: .screenDidLock)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -56,7 +56,7 @@ final class SystemEventHandler: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Screen unlock — re-check whether summaries need to be shown
+        // Screen unlock – re-check whether summaries need to be shown
         NotificationCenter.default.publisher(for: .screenDidUnlock)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -79,7 +79,7 @@ final class SystemEventHandler: ObservableObject {
     }
 
     /// Reset the daily-summary flag if we've crossed into a new day while asleep.
-    /// HarvestPlus intentionally does NOT auto-start a timer on wake — creating
+    /// HarvestPlus intentionally does NOT auto-start a timer on wake – creating
     /// time entries belongs in Harvest.
     private func handleWake() {
         let cal = Calendar.current
@@ -107,7 +107,7 @@ final class SystemEventHandler: ObservableObject {
     private func scheduleNextSummaryCheck() {
         eodTimer?.invalidate()
         // .common modes so the summary check keeps firing while the popover or a
-        // modal/tracking loop is open — otherwise the narrow EOD/EOW window
+        // modal/tracking loop is open – otherwise the narrow EOD/EOW window
         // (a 5-minute band once a day) could be missed entirely.
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in

@@ -4,8 +4,8 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
-//  Computes non-working days — Danish public holidays (including the Easter
-//  math), weekends, and the user's custom dates — behind a per-year cache.
+//  Computes non-working days – Danish public holidays (including the Easter
+//  math), weekends, and the user's custom dates – behind a per-year cache.
 //  The overtime calculator uses it to zero out targets on days off.
 //
 
@@ -54,7 +54,7 @@ struct HolidayEngine {
             days.insert(dateKeyFormatter.string(from: holiday.date))
         }
 
-        // Custom non-working dates (all years — keyed by yyyy-MM-dd so only matching years hit)
+        // Custom non-working dates (all years – keyed by yyyy-MM-dd so only matching years hit)
         let isoFormatter = ISO8601DateFormatter()
         for dateStr in customDateStrings {
             if let date = isoFormatter.date(from: dateStr) {
@@ -103,10 +103,10 @@ struct HolidayEngine {
     /// Returns true if the given date is a non-working day (weekend, holiday, or custom date).
     /// Uses a per-year cache so repeated calls (e.g. 365 days) only compute once.
     static func isNonWorkingDay(_ date: Date, settings: AppSettings) -> Bool {
-        // Weekend — check via daily target (no I/O, instant)
+        // Weekend – check via daily target (no I/O, instant)
         if settings.workSchedule.dailyTarget(for: date) == 0 { return true }
 
-        // Holiday / custom date — cached set lookup
+        // Holiday / custom date – cached set lookup
         let year = Calendar.current.component(.year, from: date)
         let days = nonWorkingDateKeys(year: year)
         let key = dateKeyFormatter.string(from: date)

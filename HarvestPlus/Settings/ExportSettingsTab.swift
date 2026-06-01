@@ -21,7 +21,7 @@ struct ExportSettingsTab: View {
 
     /// Toggle that decides whether `reportStartDate` is set or nil. Stored
     /// in @State so the DatePicker can show a sensible value (today) even
-    /// when the cutoff is off — without committing it to settings.
+    /// when the cutoff is off – without committing it to settings.
     @State private var reportStartDateEnabled: Bool = false
     @State private var reportStartDate: Date = Date()
 
@@ -52,7 +52,7 @@ struct ExportSettingsTab: View {
                     )
                 }
 
-                Text("Useful if you tracked time incorrectly for a stretch and want reports to start fresh from a specific date — historical entries stay in Harvest but are ignored in dashboards and PDFs.")
+                Text("Useful if you tracked time incorrectly for a stretch and want reports to start fresh from a specific date – historical entries stay in Harvest but are ignored in dashboards and PDFs.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

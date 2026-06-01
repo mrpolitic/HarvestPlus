@@ -22,12 +22,12 @@ final class TimerMonitor: ObservableObject {
     private weak var appState: AppState?
 
     /// Bumped at the start of every poll. A poll only commits its results if it's
-    /// still the latest one — so an older, slower poll resolving after a newer one
+    /// still the latest one – so an older, slower poll resolving after a newer one
     /// (e.g. a scheduled poll overlapping a `pollNow()` after Stop) can't clobber
     /// fresh state with stale data.
     private var pollGeneration = 0
 
-    // Long timer tracking — only notify once per entry
+    // Long timer tracking – only notify once per entry
     private var hasNotifiedLongTimer: Bool = false
     private var lastLongTimerEntryId: Int?
 
@@ -46,7 +46,7 @@ final class TimerMonitor: ObservableObject {
 
         // Schedule recurring polls. Add to RunLoop.main in .common modes so the
         // timer keeps firing while the menu-bar popover (or any modal/tracking
-        // loop) is open — with the default mode, polling would stall exactly while
+        // loop) is open – with the default mode, polling would stall exactly while
         // the user has the popover open to check status.
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -109,7 +109,7 @@ final class TimerMonitor: ObservableObject {
 
             appState.todayEntries = todayEntries
 
-            // Stamp the moment we successfully received fresh data — all
+            // Stamp the moment we successfully received fresh data – all
             // live-elapsed extrapolation (popover ticker, dashboard sums,
             // OvertimeCalculator) is computed as (now - lastPolledAt).
             appState.lastPolledAt = Date()
@@ -155,7 +155,7 @@ final class TimerMonitor: ObservableObject {
                 )
             }
         } else {
-            // New entry or below threshold — reset tracking
+            // New entry or below threshold – reset tracking
             if lastLongTimerEntryId != entry.id {
                 hasNotifiedLongTimer = false
                 lastLongTimerEntryId = entry.id

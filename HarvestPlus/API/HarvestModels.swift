@@ -42,12 +42,12 @@ struct TimeEntry: Codable, Identifiable, Equatable, Sendable {
 
     /// Project name with the leading `[code]` prefix stripped for display
     /// (e.g., `[000025] Web App` → `Web App`). Respects the user's
-    /// `stripProjectPrefixCodes` toggle — when off, returns the raw name.
+    /// `stripProjectPrefixCodes` toggle – when off, returns the raw name.
     ///
     /// The setting lives in UserDefaults; we read it directly here so the
     /// computed property has zero callers to update. Anchoring the regex
     /// at the start of the string means an in-name `[v2]` is left alone,
-    /// only the leading code prefix is stripped — matters for names like
+    /// only the leading code prefix is stripped – matters for names like
     /// "Web App [v2] Redesign".
     var displayProjectName: String {
         let strip = UserDefaults.standard.object(forKey: "stripProjectPrefixCodes") as? Bool ?? true
@@ -80,7 +80,7 @@ struct TimeEntry: Codable, Identifiable, Equatable, Sendable {
     /// For a running entry, Harvest's API returns `hours` as the **live
     /// total at poll time**, not "saved hours without the current session".
     /// So the correct extrapolation between polls is `hours + (now -
-    /// polledAt)`, NOT `hours + (now - timer_started_at)` — the latter
+    /// polledAt)`, NOT `hours + (now - timer_started_at)` – the latter
     /// double-counts the time from `timer_started_at` to `polledAt`, which
     /// was the cause of HarvestPlus showing roughly 2× the elapsed time
     /// for a running timer (reported by Michael, see CHANGELOG 1.1.0).

@@ -25,7 +25,7 @@ private let componentDayMonthFormatter: DateFormatter = {
 //   - Y-axis scale labels at min, zero, and max (previously only "0h" showed,
 //     giving the user no sense of magnitude).
 //   - Hover crosshair + floating tooltip revealing the exact date and signed
-//     hours at the nearest data point (previously the chart was inert — no
+//     hours at the nearest data point (previously the chart was inert – no
 //     way to read intermediate values).
 //
 // The caller supplies the bottom axis (a trailing `ViewBuilder`) so the
@@ -102,7 +102,7 @@ struct CumulativePaceChart<BottomAxis: View>: View {
                         .position(x: 28, y: 10)
                 }
 
-                // Baseline label — "On track" reads in plain English where the
+                // Baseline label – "On track" reads in plain English where the
                 // previous "0h" demanded the user understand the axis math.
                 // Hidden when it would collide with either extreme label.
                 if zeroY > 26 && zeroY < height - 14 {
@@ -179,7 +179,7 @@ struct CumulativePaceChart<BottomAxis: View>: View {
                     .stroke(Color.primary.opacity(0.25),
                             style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
 
-                    // Point marker — color by which side of the baseline we're on
+                    // Point marker – color by which side of the baseline we're on
                     let markerColor: Color = point.cumulative >= 0 ? overtimeColor : undertimeColor
                     Circle()
                         .fill(markerColor)
@@ -187,7 +187,7 @@ struct CumulativePaceChart<BottomAxis: View>: View {
                         .overlay(Circle().stroke(Color.primary.opacity(0.9), lineWidth: 1.5))
                         .position(x: x, y: y)
 
-                    // Floating tooltip — anchored above the marker when possible,
+                    // Floating tooltip – anchored above the marker when possible,
                     // flipped below when the marker is near the top so it doesn't
                     // clip out of the chart area.
                     let tooltipAbove = y > 36
@@ -230,7 +230,7 @@ struct CumulativePaceChart<BottomAxis: View>: View {
     private func lineFill(width: CGFloat, height: CGFloat, maxVal: Double, range: Double, zeroY: CGFloat) -> some View {
         // Vertical gradient with a hard stop at zeroY paints orange above the
         // baseline and red below. Because the path always closes against the
-        // baseline, any filled region only occupies one zone at a time — so
+        // baseline, any filled region only occupies one zone at a time – so
         // the user reads "orange area = overtime, red area = undertime" at a glance.
         let stopFraction = max(0, min(1, zeroY / height))
         let gradient = LinearGradient(
@@ -277,7 +277,7 @@ struct CumulativePaceChart<BottomAxis: View>: View {
 
     private static func formatHoursSigned(_ hours: Double) -> String {
         // Round once at minute precision so this stays consistent with
-        // PaceStatusCaption — truncating (h then .frac*60) drifts by ~1 min
+        // PaceStatusCaption – truncating (h then .frac*60) drifts by ~1 min
         // near half-minute values versus rounding the total minute count.
         let totalMinutes = Int((hours * 60).rounded())
         let sign = totalMinutes > 0 ? "+" : (totalMinutes < 0 ? "−" : "")
@@ -297,14 +297,14 @@ struct CumulativePaceChart<BottomAxis: View>: View {
 ///
 /// - `latest`: the rightmost cumulative value (positive = overtime, negative
 ///   = undertime). `nil` hides the caption entirely.
-/// - `periodNoun`: "this month", "this year", etc. — inserted at the end.
+/// - `periodNoun`: "this month", "this year", etc. – inserted at the end.
 struct PaceStatusCaption: View {
     let latest: Double?
     let periodNoun: String
 
     var body: some View {
         if let latest = latest {
-            // Round once at minute precision — avoids boundary jumps you'd get
+            // Round once at minute precision – avoids boundary jumps you'd get
             // from rounding to tenths-of-an-hour and then re-splitting into
             // h/m (e.g. 1.95 → "2h" but 1.94 → "1h 54m").
             let totalMinutes = Int((latest * 60).rounded())

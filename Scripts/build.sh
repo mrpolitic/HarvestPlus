@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# build.sh — produce a signed + notarized + stapled HarvestPlus .app.zip.
+# build.sh – produce a signed + notarized + stapled HarvestPlus .app.zip.
 #
 # Pipeline:
 #   1. xcodebuild archive, signed with the Developer ID Application cert
@@ -129,9 +129,9 @@ BUILD_NUMBER="$(
 )"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 
-# Fixed name — the install script curls this exact filename from /releases/latest.
+# Fixed name – the install script curls this exact filename from /releases/latest.
 ZIP_FIXED="$BUILD_DIR/${PRODUCT_NAME}.app.zip"
-# Versioned copy — for humans browsing the Releases page.
+# Versioned copy – for humans browsing the Releases page.
 ZIP_VERSIONED="$BUILD_DIR/${PRODUCT_NAME}-${MARKETING_VERSION}.app.zip"
 
 ok "Building ${PRODUCT_NAME} ${MARKETING_VERSION} (build ${BUILD_NUMBER})"
@@ -206,14 +206,14 @@ if [ -d "$SPARKLE_FW" ]; then
             >/dev/null 2>&1 || die "Failed to re-sign $target"
     done
 
-    # Re-sign the outer .app — its embedded framework just changed, so the
+    # Re-sign the outer .app – its embedded framework just changed, so the
     # original signature is no longer valid. Re-apply our entitlements.
     #
     # CRITICAL: codesign (unlike Xcode) does NOT expand build variables. The
     # source .entitlements uses $(AppIdentifierPrefix) for the keychain-access
     # group; passing it raw bakes in the LITERAL "$(AppIdentifierPrefix)…"
     # string, which AMFI rejects at process spawn on every machine
-    # ("Launchd job spawn failed" / RBSRequestErrorDomain 5) — and it slips past
+    # ("Launchd job spawn failed" / RBSRequestErrorDomain 5) – and it slips past
     # codesign --verify, spctl, AND Apple notarization, so it only surfaces when
     # a user actually launches the downloaded app. Resolve the prefix to the
     # team id (== $(AppIdentifierPrefix) for this single-team Developer ID app)
@@ -230,11 +230,11 @@ fi
 
 # Guard: the embedded entitlements must carry a fully-resolved keychain-access
 # group. An unexpanded $(AppIdentifierPrefix) here is the difference between an
-# app that launches and one AMFI kills at spawn — and notarization won't catch
+# app that launches and one AMFI kills at spawn – and notarization won't catch
 # it. Fail the build loudly rather than ship an app nobody can open.
 EMBEDDED_ENT="$(codesign -d --entitlements :- "$APP_EXPORTED" 2>/dev/null)"
 if printf '%s' "$EMBEDDED_ENT" | grep -q 'AppIdentifierPrefix'; then
-    die "Embedded entitlements contain an unexpanded \$(AppIdentifierPrefix) — the app would fail to launch (AMFI). Aborting."
+    die "Embedded entitlements contain an unexpanded \$(AppIdentifierPrefix) – the app would fail to launch (AMFI). Aborting."
 fi
 if ! printf '%s' "$EMBEDDED_ENT" | grep -q "${DEVELOPMENT_TEAM}\.com\.qampo\.HarvestPlus"; then
     die "Embedded keychain-access-group is missing the expected ${DEVELOPMENT_TEAM}. prefix. Aborting."
@@ -248,7 +248,7 @@ fi
 SIGN_INFO="$(codesign --display --verbose=4 "$APP_EXPORTED" 2>&1)"
 if ! printf '%s\n' "$SIGN_INFO" | grep -qF "0x10000"; then
     printf '%s\n' "$SIGN_INFO" >&2
-    die "Hardened Runtime flag not detected on the built .app — notary will reject."
+    die "Hardened Runtime flag not detected on the built .app – notary will reject."
 fi
 ok "Signature verified (Developer ID, hardened runtime)"
 
@@ -294,12 +294,12 @@ if ! xcrun stapler staple "$APP_EXPORTED" > "$STAPLE_LOG" 2>&1; then
     die "Stapling failed."
 fi
 xcrun stapler validate "$APP_EXPORTED" >/dev/null || die "Stapler validation failed."
-ok "Ticket stapled — Gatekeeper will accept this offline."
+ok "Ticket stapled – Gatekeeper will accept this offline."
 
 if spctl --assess --type execute --verbose "$APP_EXPORTED" 2>&1 | grep -q "accepted"; then
     ok "Gatekeeper assessment: accepted."
 else
-    warn "Gatekeeper assessment did not return 'accepted' — investigate before shipping."
+    warn "Gatekeeper assessment did not return 'accepted' – investigate before shipping."
 fi
 
 # ---------------------------------------------------------------------------
@@ -325,7 +325,7 @@ ok "Zip → $ZIP_VERSIONED"
 #
 # Sparkle expects each release zip to carry an EdDSA signature (separate from
 # the Apple Developer ID code signature, layered on top of it). The private
-# half of the keypair lives in the maintainer's login keychain — set up once
+# half of the keypair lives in the maintainer's login keychain – set up once
 # via `Sparkle/bin/generate_keys`. `sign_update` reads it directly; we never
 # see or pass the key material.
 #
@@ -412,7 +412,7 @@ cat <<EOF
   Coworkers install with one Terminal command:
     curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
 
-  Next step — publish on GitHub:
+  Next step – publish on GitHub:
     git tag v${MARKETING_VERSION}
     git push origin v${MARKETING_VERSION}
     gh release create v${MARKETING_VERSION} \\

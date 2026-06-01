@@ -85,7 +85,7 @@ struct YearlyDashboardView: View {
         return cal.date(from: DateComponents(year: year, month: month, day: clampedDay))!
     }
 
-    /// Fetch timestamp of the entries in `entries` — used as `polledAt`
+    /// Fetch timestamp of the entries in `entries` – used as `polledAt`
     /// for live extrapolation. See `AppState.fetchedAt(from:to:)`.
     private var entriesFetchedAt: Date? {
         appState.fetchedAt(from: yearDates.first, to: yearDates.last)
@@ -213,7 +213,7 @@ struct YearlyDashboardView: View {
 
     private var yearlyInsights: [DashboardInsight] {
         // When this year is in progress we compare against last year's first
-        // N days only — reflect that in the label so the user knows what
+        // N days only – reflect that in the label so the user knows what
         // "+12% vs last year YTD" is actually comparing.
         let label = isPartialPeriodComparison ? "last year YTD" : "last year"
         var insights = DashboardMetrics.generatePeriodInsights(
@@ -649,7 +649,7 @@ struct YearlyDashboardView: View {
     private func heatmapTooltip(day: DaySummary) -> String {
         let dateStr = yearlyMediumDateFormatter.string(from: day.date)
         if day.isNonWorkingDay && day.actual == 0 { return dateStr }
-        return "\(dateStr) — \(TimeFormat.clock(day.actual))"
+        return "\(dateStr) – \(TimeFormat.clock(day.actual))"
     }
 
     // MARK: - Helpers

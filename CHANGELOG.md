@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.1] — 2026-06-01
+## [1.1.1] – 2026-06-01
 
 ### Fixed
 
@@ -16,19 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the raw entitlements file to `codesign`, which (unlike Xcode) doesn't expand
   `$(AppIdentifierPrefix)`. The shipped app ended up with a literal
   `$(AppIdentifierPrefix)com.qampo.HarvestPlus` keychain-access-group, which
-  macOS (AMFI) rejects at launch — so 1.1.0 wouldn't open on any machine other
+  macOS (AMFI) rejects at launch – so 1.1.0 wouldn't open on any machine other
   than the build machine (whose running copy was an older build). The build
   script now resolves the prefix before re-signing, and verifies the embedded
   entitlements are fully expanded so this can't ship again. No app-code change.
 
-## [1.1.0] — 2026-05-22
+## [1.1.0] – 2026-05-22
 
 ### Added
 
 - **In-app feedback feature** under Settings → Feedback. Pick a category
   (Bug / Feature / General), write a message, optionally attach a file
   (≤ 5 MB), hit Send. Submissions go through [Web3Forms](https://web3forms.com)
-  to the maintainer's inbox — the maintainer's email is not exposed in
+  to the maintainer's inbox – the maintainer's email is not exposed in
   the app bundle. App version, macOS version, architecture, locale, and
   time zone are auto-attached so reporters don't have to dig for them.
 - **`PRIVACY.md`** at the repo root, linked from the README and from the
@@ -39,14 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *except* offering a competing time-tracking product based on the
   HarvestPlus source. Source-available, not strictly OSI-open-source, but
   free for ~every actual user case. Linked from the README.
-- **"Skip for today" button on banners** — the nudge banner footer now
+- **"Skip for today" button on banners** – the nudge banner footer now
   has both a Snooze (X min) and a Skip-for-today control. The skip lasts
   until midnight local time and survives app quit/relaunch.
 - **PDF reports show both `H:MM` and decimal hours.** Per Slack feedback,
   Harvest's web UI uses `7:30` style and that's easier to read than `7.5h`;
   the decimal is kept alongside it so anyone doing arithmetic still has
   the numeric form. Example: `7:30 (7.50h)`.
-- **Report Start Date** — Settings → Export → "Exclude entries before a
+- **Report Start Date** – Settings → Export → "Exclude entries before a
   date". Useful if you tracked time wrong for a stretch: historical
   entries stay in Harvest but are ignored in dashboards and PDFs, so
   reports start clean from a chosen day. Toggle + DatePicker; off by default.
@@ -54,14 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   task hours are surfaced as **days with decimals**, where 1 day = that
   date's actual daily target (so 3.75h on a 7.5h-target day = 0.5 days).
   Each holiday task type (configured via Settings → Holidays →
-  `holidayTaskNames`) gets its own tile — e.g., with the Danish default
+  `holidayTaskNames`) gets its own tile – e.g., with the Danish default
   setup you see separate "Holiday" and "Holiday (feriefridag)" cards
   with their own day counts. Tiles hide themselves when zero. Replaces
   the previous integer-count "Holiday days" stat that over-counted
   half-days and lumped all types together.
 - **Public holidays and weekends are grayed out in dashboard charts.**
   The weekly bar chart and the monthly/yearly heatmaps render any non-
-  working day in the neutral gray ramp — even if hours were logged —
+  working day in the neutral gray ramp – even if hours were logged –
   so you can tell at a glance which days the schedule expected work
   vs. didn't. Hours stay visible in the tooltip.
 
@@ -85,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"Snooze (15 min)" banner button actually snoozes for 15 min now.**
   Previously the banner reappeared roughly 30 s after clicking Snooze
   because `isSnoozed` was reset to `false` whenever the timer state
-  re-emitted (e.g., on the next poll). And — separate latent bug —
+  re-emitted (e.g., on the next poll). And – separate latent bug –
   after a few snooze clicks the banner sometimes stopped appearing
   forever, because of stuck-Timer interactions. Both fixed by
   refactoring `BannerManager` from boolean+Timer state to absolute
@@ -109,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modes, so they keep firing during menu/modal tracking instead of pausing
   exactly when you've opened the popover to check status.
 - **Pasted Account ID / API token are trimmed** before validating and
-  saving — a trailing newline or stray space (common on copy/paste) no
+  saving – a trailing newline or stray space (common on copy/paste) no
   longer causes a mystifying "invalid credentials" failure, and the token
   is written before the account id so a failed save can't leave a mismatched
   pair in the keychain.
@@ -119,7 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edge in project-color selection.
 - **"Open Harvest" on the nudge banner now re-arms.** It used to launch Harvest,
   hide the banner, and never come back unless the timer state happened to
-  transition — so a user who got distracted in Harvest and never started a
+  transition – so a user who got distracted in Harvest and never started a
   timer went silently un-tracked for the rest of the day. The nudge now
   re-evaluates 3 minutes later; if a timer is started in the meantime the
   `.running` transition cancels the pending nudge.
@@ -148,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binary ACLs via `SecAccessCreate`) to the modern data-protection
   keychain (the iOS-style Keychain Services API). The legacy keychain
   prompted on every code-signature change because its ACLs are bound to
-  specific binaries — even the "allow all" trick we tried earlier turned
+  specific binaries – even the "allow all" trick we tried earlier turned
   out to mean "only the creating binary" in practice. The data-protection
   keychain uses team-prefixed access groups instead: every binary signed
   with team `PA8H58YHD6` plus the `keychain-access-groups` entitlement
@@ -181,11 +181,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Harvest credentials saved by 1.0.x live in the legacy keychain and
   won't be visible to 1.1.0. The app will behave as "not yet connected"
-  on first launch — open Settings → Integrations and re-enter your
+  on first launch – open Settings → Integrations and re-enter your
   Harvest Account ID and Personal Access Token once. From then on,
   launches are silent across all future builds.
 
-## [1.0.10] — 2026-05-22
+## [1.0.10] – 2026-05-22
 
 ### Fixed
 
@@ -198,7 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     regardless of whether the new ACL is identical to the old one. Fix:
     only set `kSecAttrAccess` on the initial `SecItemAdd` (item creation),
     never on update.
-  - `AppState.init()` ran a "migration re-save" on every launch — it
+  - `AppState.init()` ran a "migration re-save" on every launch – it
     read both credentials and immediately wrote them back, which used to
     refresh the ad-hoc ACL. With a stable Developer ID signature this
     migration is unnecessary, and combined with the bug above it was
@@ -207,7 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Net effect: launches are now silent. The keychain ACL gets set exactly
   once, when the user first enters their credentials in Settings.
 
-## [1.0.9] — 2026-05-21
+## [1.0.9] – 2026-05-21
 
 ### Changed
 
@@ -221,13 +221,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     on every update. (Existing users may see one final prompt on the upgrade
     from the ad-hoc-signed 1.0.8 to this build, then never again.)
   - Users who previously denied a Gatekeeper prompt for the unsigned build
-    are unaffected — the new install replaces the rejected binary entirely.
+    are unaffected – the new install replaces the rejected binary entirely.
 - `Scripts/build.sh` now signs with the Developer ID Application cert,
   submits the zip to Apple's notary service via `xcrun notarytool`, waits
   for approval, and staples the returned ticket. Requires a one-time
   `notarytool store-credentials` setup (documented in the script header).
 
-## [1.0.8] — 2026-04-22
+## [1.0.8] – 2026-04-22
 
 ### Fixed
 
@@ -235,11 +235,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time the tab is opened. `loadCredentials()` was calling `SecItemCopyMatching`
   on both keychain items on every `.onAppear`, triggering an ACL check each
   visit. Fix: `AppState` already reads the token from the keychain exactly once
-  at launch — it now keeps it in a `harvestToken` property in memory.
+  at launch – it now keeps it in a `harvestToken` property in memory.
   `IntegrationsSettingsTab` reads that in-memory value instead of going back to
   the keychain. Zero keychain calls on subsequent visits to the tab.
 
-## [1.0.7] — 2026-04-22
+## [1.0.7] – 2026-04-22
 
 ### Fixed
 
@@ -247,7 +247,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The previous approach wrote a `.command` script to the sandbox temp
   directory, then opened it in Terminal. macOS automatically applies
   `com.apple.quarantine` to executable files created by sandboxed apps, and
-  Gatekeeper blocks them even after `removexattr` — the xattr is re-applied
+  Gatekeeper blocks them even after `removexattr` – the xattr is re-applied
   after the write. Fix: drop the file entirely. The button now uses
   `NSAppleScript` to send `do script` directly to Terminal via Apple Events.
   No file = no quarantine. macOS shows a one-time consent dialog
@@ -256,20 +256,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `com.apple.security.automation.apple-events` entitlement (added to
   `HarvestPlus.entitlements` and wired up in the Xcode build settings).
 
-## [1.0.6] — 2026-04-22
+## [1.0.6] – 2026-04-22
 
 ### Fixed
 
 - Keychain prompts reduced from 4 to 2 (one-time, on first launch after
   install). `save()` previously used delete-then-add: `SecItemDelete` carries
   its own ACL check, so macOS prompted once for the read and again for the
-  delete — 2 prompts per credential × 2 credentials = 4 prompts. Replaced
+  delete – 2 prompts per credential × 2 credentials = 4 prompts. Replaced
   with `SecItemUpdate`+add (update in place if the item exists, add fresh if
   not). A single update operation reuses the session-level access already
   granted by the preceding read, eliminating the extra delete prompts.
   Removed the now-unused `migrateToAllowAllAccess()` helper.
 
-## [1.0.5] — 2026-04-22
+## [1.0.5] – 2026-04-22
 
 ### Fixed
 
@@ -278,26 +278,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by macOS (sandboxed apps that create executable files trigger this).
   Gatekeeper then blocked Terminal from opening it with "is damaged and
   can't be opened". Fix: call `removexattr(path, "com.apple.quarantine", 0)`
-  on the file immediately after writing it — permitted on files the app
+  on the file immediately after writing it – permitted on files the app
   owns in its own sandbox container.
 
-## [1.0.4] — 2026-04-22
+## [1.0.4] – 2026-04-22
 
 ### Fixed
 
 - Keychain prompts on install reduced from up to 4 (per install) to at most
   2 (one-time migration only). The 1.0.3 fix read credentials twice on launch
-  — once in `AppState.init()` and again in the AppDelegate migration — so
+  – once in `AppState.init()` and again in the AppDelegate migration – so
   macOS could prompt for each item on both reads. The migration is now inlined
   into `AppState.init()` as an immediate re-save after the existing read,
   so there is only ever one read pass. After the migration runs once, future
   installs prompt zero times.
 
-## [1.0.3] — 2026-04-22
+## [1.0.3] – 2026-04-22
 
 ### Changed
 
-- Update button now opens Terminal directly and runs the installer — no more
+- Update button now opens Terminal directly and runs the installer – no more
   copying and pasting a command. Clicking **Install Update** in Settings →
   General → About opens a Terminal window that downloads and installs the new
   version in one step.
@@ -309,20 +309,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt. A one-time migration at first launch re-saves existing items with
   the new ACL (may prompt once per item for items created by an older build).
 
-## [1.0.2] — 2026-04-22
+## [1.0.2] – 2026-04-22
 
 ### Changed
 
 - Installer now defaults to `~/Applications` instead of `/Applications`, so
   no admin password is ever requested. macOS treats `~/Applications` as a
-  first-class app location — Launchpad/Spotlight/launch-at-login all still
+  first-class app location – Launchpad/Spotlight/launch-at-login all still
   work. Pass `--system` to the install command for the old `/Applications`
   behaviour (still prompts for admin once).
 - `install.sh` now detects a leftover copy in the other location after
   install and prints a one-line removal hint, so users who migrate don't
   end up with two HarvestPlus icons in Launchpad.
 
-## [1.0.1] — 2026-04-22
+## [1.0.1] – 2026-04-22
 
 ### Changed
 
@@ -345,7 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Scripts/ExportOptions.plist` are kept in the repo as scaffolding for a
   future signed/notarised pipeline but are unused today.
 
-## [1.0.0] — 2026-04-22
+## [1.0.0] – 2026-04-22
 
 ### Added
 

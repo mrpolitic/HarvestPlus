@@ -79,7 +79,7 @@ final class IdleDetector: ObservableObject {
 
         if systemIdleTime >= threshold {
             if !isIdle {
-                // Just crossed the threshold — record when idle started
+                // Just crossed the threshold – record when idle started
                 isIdle = true
                 idleStartTime = Date().addingTimeInterval(-systemIdleTime)
             }
@@ -91,7 +91,7 @@ final class IdleDetector: ObservableObject {
             }
         } else {
             if isIdle {
-                // User came back — reset
+                // User came back – reset
                 resetIdleState()
             }
         }

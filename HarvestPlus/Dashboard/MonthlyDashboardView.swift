@@ -61,7 +61,7 @@ struct MonthlyDashboardView: View {
 
     /// When viewing the current (in-progress) month, cap the prior month's
     /// range at today's day-of-month so totals compare like-for-like. Apr 1–21
-    /// of this month vs Mar 1–21 of last month — not Apr 1–21 vs full March,
+    /// of this month vs Mar 1–21 of last month – not Apr 1–21 vs full March,
     /// which would always make "this month" look smaller.
     ///
     /// Clamps when the previous month is shorter (e.g., today is Mar 31,
@@ -102,7 +102,7 @@ struct MonthlyDashboardView: View {
         )
     }
 
-    /// Fetch timestamp of the entries in `entries` — used as `polledAt`
+    /// Fetch timestamp of the entries in `entries` – used as `polledAt`
     /// for live extrapolation. See `AppState.fetchedAt(from:to:)`.
     private var entriesFetchedAt: Date? {
         appState.fetchedAt(from: monthDates.first, to: monthDates.last)
@@ -134,7 +134,7 @@ struct MonthlyDashboardView: View {
                     monthlyMetricCards
                 }
 
-                // Cumulative overtime chart (existing — target-based, but informational)
+                // Cumulative overtime chart (existing – target-based, but informational)
                 cumulativeOvertimeChart
 
                 // Project composition (new)
@@ -232,7 +232,7 @@ struct MonthlyDashboardView: View {
     // MARK: - Insights
 
     private var monthlyInsights: [DashboardInsight] {
-        // See `previousMonthDates` — when the month is in progress, the prior
+        // See `previousMonthDates` – when the month is in progress, the prior
         // month's data is truncated to the same day-of-month for a fair
         // comparison. Label change reflects that.
         let label = isPartialPeriodComparison ? "last month so far" : "last month"
@@ -425,9 +425,9 @@ struct MonthlyDashboardView: View {
     private func heatmapTooltip(day: DaySummary) -> String {
         let dateStr = monthlyMediumDateFormatter.string(from: day.date)
         if day.isNonWorkingDay && day.actual == 0 {
-            return "\(dateStr) — Non-working day"
+            return "\(dateStr) – Non-working day"
         }
-        return "\(dateStr) — \(TimeFormat.clock(day.actual))"
+        return "\(dateStr) – \(TimeFormat.clock(day.actual))"
     }
 
     // MARK: - Highlights Section
@@ -462,7 +462,7 @@ struct MonthlyDashboardView: View {
                     icon: "sun.max.fill",
                     iconColor: Color(red: 0.61, green: 0.35, blue: 0.71),
                     label: cat.taskName,
-                    // Decimal days against each day's actual target — see
+                    // Decimal days against each day's actual target – see
                     // DashboardMetrics.holidayDaysByTaskName.
                     value: TimeFormat.days(cat.days),
                     subtitle: nil

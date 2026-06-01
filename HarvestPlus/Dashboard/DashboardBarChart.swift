@@ -46,7 +46,7 @@ enum ChartAxis {
         return (ticks, niceMax)
     }
 
-    /// Short hour label for a tick — "0h", "10h", "0.5h", etc.
+    /// Short hour label for a tick – "0h", "10h", "0.5h", etc.
     /// Whole-hour values drop the decimal; sub-hour values keep one.
     static func tickLabel(_ hours: Double) -> String {
         if hours == 0 { return "0h" }
@@ -79,7 +79,7 @@ struct DashboardBarChart: View {
         let color: Color
         let tooltip: String
         let axisLabel: String
-        /// Color for the bottom-axis label — Weekly paints "today" orange,
+        /// Color for the bottom-axis label – Weekly paints "today" orange,
         /// Yearly paints the current month orange.
         var axisLabelColor: Color = .secondary
         var axisLabelBold: Bool = false
@@ -98,7 +98,7 @@ struct DashboardBarChart: View {
             Color.clear.frame(height: chartHeight + bottomAxisHeight + 6)
         } else {
             // Single top-level GeometryReader measures the full card width once.
-            // We then hand *explicit* widths to every child — no nested flex
+            // We then hand *explicit* widths to every child – no nested flex
             // layout, no HStack maxWidth distribution, no chance of SwiftUI
             // collapsing the plot area to intrinsic size and centering it
             // inside the card. The x-coordinate of bar `i` and label `i` are
@@ -150,7 +150,7 @@ struct DashboardBarChart: View {
 
     private func plotBody(ticks: [Double], niceMax: Double, plotWidth: CGFloat, bw: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            // Gridlines — solid at 0 baseline, dashed above.
+            // Gridlines – solid at 0 baseline, dashed above.
             ForEach(Array(ticks.enumerated()), id: \.element) { _, tick in
                 let fraction = niceMax > 0 ? CGFloat(1 - tick / niceMax) : 0
                 Path { p in
@@ -163,7 +163,7 @@ struct DashboardBarChart: View {
                 )
             }
 
-            // Bars — x is `idx * (bw + spacing) + bw/2`, identical to the
+            // Bars – x is `idx * (bw + spacing) + bw/2`, identical to the
             // label row below. No flex layout involved.
             ForEach(Array(bars.enumerated()), id: \.element.id) { idx, bar in
                 let barHeight: CGFloat = bar.value > 0
@@ -206,7 +206,7 @@ struct DashboardBarChart: View {
 
 // MARK: - Sparkline
 
-/// Compact line chart — passes through a list of values and draws a smooth path.
+/// Compact line chart – passes through a list of values and draws a smooth path.
 /// If all values are equal, draws a centered flat line so the view never disappears.
 struct SparklineView: View {
     let values: [Double]

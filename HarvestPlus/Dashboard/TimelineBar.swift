@@ -123,7 +123,7 @@ struct TimelineBar: View {
                             .fill(projectColor(for: entry))
                             .frame(width: bw, height: 30)
                             .offset(x: bx, y: 0)
-                            .help("\(entry.displayProjectName) / \(entry.task.name) — \(TimeFormat.clockExact(entry.hours))")
+                            .help("\(entry.displayProjectName) / \(entry.task.name) – \(TimeFormat.clockExact(entry.hours))")
                     }
 
                     // "Now" indicator
@@ -192,7 +192,7 @@ struct TimelineBar: View {
             let m = cal.component(.minute, from: started)
             return h * 60 + m
         }
-        // No start time — estimate by placing entries sequentially
+        // No start time – estimate by placing entries sequentially
         return estimateStartMinute(for: entry)
     }
 

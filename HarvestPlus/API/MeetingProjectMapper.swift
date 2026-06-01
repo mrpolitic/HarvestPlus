@@ -96,7 +96,7 @@ final class MeetingProjectMapper {
             let data = try JSONEncoder().encode(map)
             userDefaults.set(data, forKey: defaultsKey)
         } catch {
-            // If we can't encode it, there's nothing sensible to do — silently drop.
+            // If we can't encode it, there's nothing sensible to do – silently drop.
         }
     }
 }

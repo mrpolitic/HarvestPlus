@@ -5,8 +5,8 @@
 //  Renders the daily / weekly / monthly / yearly reports to CSV or PDF. This
 //  file defines the input type (`ExportPeriod`) and the `ReportExporter`
 //  namespace; the rendering itself lives alongside in:
-//    - ReportExporter+CSV.swift — `exportCSV` + the CSV builders
-//    - ReportExporter+PDF.swift — `exportPDF` + the PDF layout / builders
+//    - ReportExporter+CSV.swift – `exportCSV` + the CSV builders
+//    - ReportExporter+PDF.swift – `exportPDF` + the PDF layout / builders
 //  The save panel that calls these lives in DashboardView.
 //
 //  Created by Razvan Politic on 15/04/2026.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install.sh — one-shot HarvestPlus installer.
+# install.sh – one-shot HarvestPlus installer.
 #
 # Usage (copy-paste into Terminal):
 #
@@ -13,12 +13,12 @@
 # What it does:
 #   1. Downloads the latest HarvestPlus.app.zip from GitHub Releases.
 #   2. Extracts it into ~/Applications (or /Applications with --system).
-#   3. Strips the com.apple.quarantine xattr (defensive — see below).
+#   3. Strips the com.apple.quarantine xattr (defensive – see below).
 #   4. Launches the app.
 #
 # Why ~/Applications by default?
 # ------------------------------
-# macOS treats ~/Applications as a first-class app location — Launchpad,
+# macOS treats ~/Applications as a first-class app location – Launchpad,
 # Spotlight, auto-start at login, Dock-pinning, and launch services all
 # pick it up identically to /Applications. The only practical difference
 # is that installs there need *no* admin password, which matters a lot
@@ -28,7 +28,7 @@
 # ----------------------------------------
 # Since 1.0.9, HarvestPlus is signed with a Developer ID Application
 # certificate and notarized by Apple, with the notarization ticket
-# stapled to the .app. That means Gatekeeper accepts it offline — no
+# stapled to the .app. That means Gatekeeper accepts it offline – no
 # "is damaged", no "unidentified developer", no System Settings trip.
 #
 # The curl path is still the canonical install for two reasons:
@@ -78,7 +78,7 @@ INSTALL_PATH="$APPS_DIR/${APP_NAME}.app"
 OTHER_PATH="$OTHER_DIR/${APP_NAME}.app"
 
 # /releases/latest/download/<asset> 302s to the actual asset on the latest
-# non-prerelease release — avoids hitting the JSON API's rate limit.
+# non-prerelease release – avoids hitting the JSON API's rate limit.
 ASSET_URL="https://github.com/${OWNER}/${REPO}/releases/latest/download/${APP_NAME}.app.zip"
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ if [ ! -w "$APPS_DIR" ]; then
     if [ $SYSTEM_INSTALL -eq 1 ]; then
         if command -v sudo >/dev/null 2>&1; then
             SUDO="sudo"
-            blue "Installing to ${APPS_DIR} — you'll be prompted once for your admin password."
+            blue "Installing to ${APPS_DIR} – you'll be prompted once for your admin password."
         else
             red "Can't write to ${APPS_DIR} and sudo isn't available."
             exit 1
@@ -148,7 +148,7 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
     # Use killall directly rather than `osascript "tell ... to quit"`.
     # osascript would send an Apple Event to HarvestPlus, which on first
     # use triggers a "Terminal wants to control HarvestPlus" consent
-    # dialog — not a password prompt, but still avoidable friction.
+    # dialog – not a password prompt, but still avoidable friction.
     # `killall` on a process the current user owns needs no permission
     # and produces no dialog. HarvestPlus has no unsaved state, so the
     # hard kill is safe.
@@ -196,7 +196,7 @@ blue "Launching ${APP_NAME}…"
 /usr/bin/open "$INSTALL_PATH"
 
 green "HarvestPlus is installed at ${INSTALL_PATH}."
-green "Look in your menu bar — there's a new icon."
+green "Look in your menu bar – there's a new icon."
 
 # ---------------------------------------------------------------------------
 # Warn about a stale copy in the other location
@@ -204,7 +204,7 @@ green "Look in your menu bar — there's a new icon."
 
 if [ -d "$OTHER_PATH" ]; then
     yell ""
-    yell "Heads up — an old HarvestPlus.app still lives at:"
+    yell "Heads up – an old HarvestPlus.app still lives at:"
     yell "   ${OTHER_PATH}"
     yell "Launchpad/Spotlight will see both copies. To remove the old one:"
     if [ $SYSTEM_INSTALL -eq 1 ]; then

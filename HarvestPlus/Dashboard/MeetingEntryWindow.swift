@@ -25,7 +25,7 @@ struct MeetingEntryWindow: View {
                 )
                 .environmentObject(appState)
             } else {
-                // No meeting selected — auto-close.
+                // No meeting selected – auto-close.
                 Color.clear
                     .onAppear { dismissWindow(id: "meeting-entry") }
             }

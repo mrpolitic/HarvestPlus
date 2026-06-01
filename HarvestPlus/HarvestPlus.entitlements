@@ -6,15 +6,15 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 
-	<!-- Outgoing network — Harvest API + Sparkle update checks -->
+	<!-- Outgoing network – Harvest API + Sparkle update checks -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 
-	<!-- Calendar access — EventKit for meeting overlays -->
+	<!-- Calendar access – EventKit for meeting overlays -->
 	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
 
-	<!-- User-selected files — PDF export destination picker -->
+	<!-- User-selected files – PDF export destination picker -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 
@@ -22,7 +22,7 @@
 	     The team-id prefix (PA8H58YHD6.) is substituted by Xcode at
 	     build time via $(AppIdentifierPrefix). Every binary signed with
 	     this team ID + this entitlement reads the same items, regardless
-	     of which code signature wrote them — Debug, Release, ad-hoc, all
+	     of which code signature wrote them – Debug, Release, ad-hoc, all
 	     equivalent. This is what eliminates the "wants to use your
 	     confidential information" prompt on every build switch.
 

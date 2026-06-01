@@ -5,7 +5,7 @@
 //  Created by Razvan Politic on 21/04/2026.
 //
 //  Shared computations used by all dashboard views (Daily / Weekly / Monthly / Yearly).
-//  These functions are intentionally decoupled from the "target" concept — they derive
+//  These functions are intentionally decoupled from the "target" concept – they derive
 //  insights from logged data alone so they remain meaningful for users who don't
 //  enforce daily hour targets.
 
@@ -100,7 +100,7 @@ struct DashboardMetrics {
     /// periods where no running timer can exist.
     ///
     /// If `cutoff` is set, entries dated strictly before that day are
-    /// excluded — same semantics as `OvertimeCalculator`'s reportStartDate
+    /// excluded – same semantics as `OvertimeCalculator`'s reportStartDate
     /// handling.
     static func projectHours(
         from entries: [TimeEntry],
@@ -117,7 +117,7 @@ struct DashboardMetrics {
                 continue
             }
             let hours = entry.liveHours(now: now, polledAt: polledAt)
-            // `default:` seeds with (name, 0) on first sight and we add in place —
+            // `default:` seeds with (name, 0) on first sight and we add in place –
             // one hash lookup per entry instead of two (previous `!= nil` check
             // + force-unwrap write).
             grouped[entry.project.id, default: (name: entry.displayProjectName, hours: 0)].hours += hours
@@ -129,7 +129,7 @@ struct DashboardMetrics {
 
     // MARK: - Lightest Day
 
-    /// Day with the fewest hours — among working days that had SOME logged time.
+    /// Day with the fewest hours – among working days that had SOME logged time.
     /// Returns nil if no working day had entries.
     static func fewestHoursDay(from days: [DaySummary]) -> DaySummary? {
         let working = days.filter { !$0.isNonWorkingDay && $0.actual > 0 }
@@ -139,7 +139,7 @@ struct DashboardMetrics {
     // MARK: - Streak
 
     /// Current streak of consecutive working-days (today going backwards) on which hours were logged.
-    /// Non-working days are "skipped" — they neither continue nor break a streak.
+    /// Non-working days are "skipped" – they neither continue nor break a streak.
     /// `days` must be sorted ascending by date.
     static func currentWorkingStreak(from days: [DaySummary]) -> Int {
         var streak = 0
@@ -205,9 +205,9 @@ struct DashboardMetrics {
     }
 
     /// Format a percent change as a signed string like "+12%" / "−8%".
-    /// Rounds to whole percents. Returns "—" for nil.
+    /// Rounds to whole percents. Returns "–" for nil.
     static func formatPercentChange(_ value: Double?) -> String {
-        guard let value = value else { return "—" }
+        guard let value = value else { return "–" }
         let rounded = Int(value.rounded())
         if rounded == 0 { return "0%" }
         let sign = rounded > 0 ? "+" : "−"
@@ -218,7 +218,7 @@ struct DashboardMetrics {
 
     /// Total duration of meetings (in hours) that fall on the given day.
     static func meetingHours(meetings: [CalendarEvent]) -> Double {
-        // Clamp each event at 0 — a malformed calendar event with end < start would
+        // Clamp each event at 0 – a malformed calendar event with end < start would
         // otherwise contribute negative hours to the meeting-load math.
         meetings.reduce(0) { $0 + max(0, Double($1.durationMinutes)) / 60.0 }
     }
@@ -257,16 +257,16 @@ struct DashboardMetrics {
 
     // MARK: - Vacation / Holiday Tally
 
-    /// Number of days in the range that count as "vacation / holiday" — either
+    /// Number of days in the range that count as "vacation / holiday" – either
     /// marked non-working AND had holiday hours, OR holiday-task hours logged.
     static func vacationDaysTaken(from days: [DaySummary]) -> Int {
         days.filter { $0.holidayHours > 0 }.count
     }
 
     /// Time off taken over the range, expressed in **days** with decimals
-    /// (each spent-date's per-day target as the unit — a 7.5h holiday entry
+    /// (each spent-date's per-day target as the unit – a 7.5h holiday entry
     /// on a 7.5h-target day = 1.0 days), broken down per holiday task name
-    /// (e.g., "Holiday" vs. "Holiday (feriefridag)" — and any other names
+    /// (e.g., "Holiday" vs. "Holiday (feriefridag)" – and any other names
     /// the user has configured in `holidayTaskNames`). Used by the
     /// dashboards to show one tile per type instead of an aggregated
     /// "Time off" row.
@@ -311,7 +311,7 @@ struct DashboardMetrics {
     // MARK: - Insight Generation
 
     /// Returns a short (max `limit`) list of auto-generated insight bullets for a period.
-    /// Intentionally avoids any "target hit" framing — users don't enforce daily targets.
+    /// Intentionally avoids any "target hit" framing – users don't enforce daily targets.
     static func generatePeriodInsights(
         days: [DaySummary],
         entries: [TimeEntry],
@@ -350,7 +350,7 @@ struct DashboardMetrics {
             }
         }
 
-        // 2. Project trend — largest mover
+        // 2. Project trend – largest mover
         if let prevEntries = previousEntries {
             let curProjects = projectHours(from: entries, polledAt: polledAt)
             let prevProjects = projectHours(from: prevEntries)
@@ -411,7 +411,7 @@ struct DashboardMetrics {
                 let epdRounded = (epd * 10).rounded() / 10
                 insights.append(DashboardInsight(
                     icon: focus.label == "Focused" ? "target" : "square.grid.2x2",
-                    text: "\(focus.label) — \(epdRounded) entries/day on average",
+                    text: "\(focus.label) – \(epdRounded) entries/day on average",
                     accent: focus.color
                 ))
             }

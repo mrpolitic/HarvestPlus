@@ -1,7 +1,7 @@
 # HarvestPlus
 
 A macOS menu-bar companion for [Harvest](https://www.getharvest.com) that
-turns raw Harvest data into dashboards, PDF reports, and smart reminders —
+turns raw Harvest data into dashboards, PDF reports, and smart reminders,
 without pulling you out of flow. Runs quietly in the menu bar; no Dock icon,
 no subscription, no setup beyond pasting your API token.
 
@@ -9,7 +9,7 @@ HarvestPlus is **not** affiliated with or endorsed by Harvest / Iridesco. It's
 a community-built client that talks to the public [Harvest API
 v2](https://help.getharvest.com/api-v2/).
 
-Source-available under the [PolyForm Shield License 1.0.0](./LICENSE) —
+Source-available under the [PolyForm Shield License 1.0.0](./LICENSE):
 free for any use, including at work, except for building a competing
 product. See [PRIVACY.md](./PRIVACY.md) for what data the app touches and
 where it goes (short answer: almost nothing leaves your Mac).
@@ -18,23 +18,23 @@ where it goes (short answer: almost nothing leaves your Mac).
 
 ## What it does
 
-- **Dashboards** — daily, weekly, monthly, and yearly views with summary cards:
-  hours logged, target, overtime, and break usage. Always current, no page
+- **Dashboards.** Daily, weekly, monthly, and yearly views with summary cards
+  for hours logged, target, overtime, and break usage. Always current, no page
   reload.
-- **PDF reports** — export any of those ranges to a clean, ready-to-send PDF
+- **PDF reports.** Export any of those ranges to a clean, ready-to-send PDF
   in two clicks.
-- **Smart banners** (optional) — get nudged when you forget to stop the timer,
-  or when a calendar meeting has just ended without a logged entry. Dismissible
-  and configurable.
-- **Calendar integration** — your macOS Calendar events appear alongside your
+- **Smart banners** (optional). A nudge when you forget to stop the timer,
+  or when a calendar meeting has just ended without a logged entry. Configurable,
+  with snooze and skip-for-today.
+- **Calendar integration.** Your macOS Calendar events appear alongside your
   time entries so you can see which meetings are logged and which aren't, and
   convert any event to a Harvest entry in two clicks.
-- **Overtime calculator** — set per-weekday hour targets (e.g. 7.5h Mon–Thu,
+- **Overtime calculator.** Set per-weekday hour targets (e.g. 7.5h Mon–Thu,
   7.0h Fri), a lunch window, and any public holidays or PTO days. HarvestPlus
   rolls up your real overtime and undertime against those targets.
-- **Auto-updates** — the app polls GitHub Releases daily. When a new version is
-  available, one click opens Terminal and installs it in place.
-- **Menu-bar popover** — today's entries and running timer are always one click
+- **Auto-updates.** The app checks GitHub Releases daily and installs new
+  versions silently in the background. No Terminal window, no clicks.
+- **Menu-bar popover.** Today's entries and running timer are always one click
   away, without opening a full app window.
 
 ---
@@ -47,13 +47,13 @@ Open **Terminal** (`⌘-Space`, type "Terminal", enter), paste this, hit Return:
 curl -fsSL https://raw.githubusercontent.com/mrpolitic/HarvestPlus/main/Scripts/install.sh | bash
 ```
 
-No admin password needed — this installs to `~/Applications` (your user's
+No admin password needed: this installs to `~/Applications` (your user's
 private Applications folder). macOS treats `~/Applications` identically to
 `/Applications` for Launchpad, Spotlight, Dock-pinning, and launch-at-login,
 so the app works the same either way.
 
 If you'd rather install to the system-wide `/Applications` (visible to other
-users on the same Mac), append `--system` — you'll be asked for your admin
+users on the same Mac), append `--system`, and you'll be asked for your admin
 password once:
 
 ```bash
@@ -70,7 +70,7 @@ Either way the script:
 4. Launches the app. A small icon appears in your menu bar.
 
 > The icon will be grey and show no data until you connect your Harvest
-> account — see the next section.
+> account – see the next section.
 
 ---
 
@@ -79,26 +79,26 @@ Either way the script:
 The app needs your Harvest Account ID and a personal access token before it
 can do anything. This is a one-time step.
 
-### 1 — Get your credentials from Harvest
+### 1. Get your credentials from Harvest
 
 Go to **[id.getharvest.com/developers](https://id.getharvest.com/developers)**.
 
 You'll see two things you need on that page:
 
-- **Account ID** — listed at the top of the page next to your account name.
+- **Account ID**: shown at the top of the page next to your account name.
   It's a plain number (e.g. `1234567`).
-- **Personal Access Token** — scroll to the *Personal Access Tokens* section
+- **Personal Access Token**: scroll to the *Personal Access Tokens* section
   and click **Create new personal access token**. Give it any name
   (e.g. "HarvestPlus"), click Create, and copy the token. You won't be able
   to see it again after closing that dialog.
 
-> Make sure you're in the **Personal Access Tokens** section — not
+> Make sure you're in the **Personal Access Tokens** section – not
 > *OAuth2 Applications*. OAuth tokens won't work here.
 
-### 2 — Enter them in HarvestPlus
+### 2. Enter them in HarvestPlus
 
 1. Click the HarvestPlus icon in your menu bar.
-2. Open **Settings** — either press `⌘,` or click the gear icon.
+2. Open **Settings** – either press `⌘,` or click the gear icon.
 3. Go to the **Integrations** tab.
 4. Paste your **Account ID** and **Personal Access Token** into the two fields.
 5. Click **Save** (or press Return).
@@ -106,7 +106,7 @@ You'll see two things you need on that page:
 The icon will update immediately to show your current timer state. If you see
 an error, double-check that you copied the full token and the right Account ID.
 
-### 3 — Connect your calendar (optional)
+### 3. Connect your calendar (optional)
 
 Still in Settings, switch to the **Integrations** tab and scroll down to the
 Calendar section. Click **Grant Access** and approve the macOS prompt. This
@@ -119,18 +119,18 @@ you can spot unlogged meetings.
 > new release is published, so coworkers only ever learn one install
 > workflow. The app is signed with a Developer ID Application certificate
 > and notarized by Apple, so it would also launch fine from a downloaded
-> `.app` — `curl | bash` is just less typing.
+> `.app` – `curl | bash` is just less typing.
 
 **System requirements**
 
-- macOS 14 (Sonoma) or later — tested on macOS 26 (Tahoe).
+- macOS 14 (Sonoma) or later – tested on macOS 26 (Tahoe).
 - Apple Silicon or Intel.
 - A Harvest account with API access.
 
 **Keeping up to date**
 
 HarvestPlus checks for new releases automatically once per 24 hours and,
-when one is found, installs it silently in the background — Terminal
+when one is found, installs it silently in the background – Terminal
 flashes open, runs the install one-liner, and the app relaunches on the
 new version. No password, no clicks, nothing to dismiss.
 
@@ -195,15 +195,15 @@ HarvestPlusApp (@main)
 
 **`AppState`** is an `ObservableObject` that owns:
 
-- `timerState: TimerState` — `.running(TimeEntry) | .stopped | .offline`
+- `timerState: TimerState` – `.running(TimeEntry) | .stopped | .offline`
 - `todayEntries`, `todayMeetings`, `weekSummary`, `monthSummary`, `yearSummary`
-- `schedule: WorkSchedule` — weekday targets, lunch window, working hours
-- `settings: AppSettings` — user preferences persisted to UserDefaults
-- `updateChecker: UpdateChecker` — GitHub Releases poller
+- `schedule: WorkSchedule` – weekday targets, lunch window, working hours
+- `settings: AppSettings` – user preferences persisted to UserDefaults
+- `updateChecker: UpdateChecker` – GitHub Releases poller
 
 Views observe `AppState` via `@EnvironmentObject`. Mutations flow back into
 `AppState` which in turn triggers the Harvest API client and updates the
-published properties. No Redux, no TCA — plain `ObservableObject`.
+published properties. No Redux, no TCA – plain `ObservableObject`.
 
 ### Data flow
 
@@ -246,7 +246,7 @@ constants rather than constructed per-frame.
 **Keychain** (`API/KeychainHelper.swift`)
 - Generic-password items under service name `com.qampo.HarvestPlus`.
 - Two items: `harvest.account.id` (text) and `harvest.token` (text).
-- `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — not synced to iCloud.
+- `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` – not synced to iCloud.
 
 **GitHub Releases** (`Updates/UpdateChecker.swift`)
 - Polls `api.github.com/repos/mrpolitic/HarvestPlus/releases/latest` once
@@ -268,19 +268,19 @@ constants rather than constructed per-frame.
   Gatekeeper accepts the binary as coming from an Apple-verified developer.
 - **Notarization**: every release is submitted to Apple's notary service via
   `xcrun notarytool` and the returned ticket is **stapled** to the `.app`,
-  so Gatekeeper can validate it offline — no "is damaged" / "unidentified
+  so Gatekeeper can validate it offline – no "is damaged" / "unidentified
   developer" dialogs, no System Settings trip.
 - **Entitlements** (`HarvestPlus.entitlements`):
-  - `com.apple.security.network.client` — Harvest API + update checks.
-  - `com.apple.security.personal-information.calendars` — EventKit.
-  - `com.apple.security.files.user-selected.read-write` — PDF export destination.
-  - `com.apple.security.automation.apple-events` — tells Terminal to run the
+  - `com.apple.security.network.client` – Harvest API + update checks.
+  - `com.apple.security.personal-information.calendars` – EventKit.
+  - `com.apple.security.files.user-selected.read-write` – PDF export destination.
+  - `com.apple.security.automation.apple-events` – tells Terminal to run the
     installer when you click *Install Update* (one-time consent dialog).
 - **What leaves your Mac**
   - HTTPS calls to `api.harvestapp.com` (authenticated with your token).
   - HTTPS calls to `api.github.com` and `objects.githubusercontent.com`
     (unauthenticated, for update checks).
-  - Nothing else — no analytics, no telemetry, no crash reporter.
+  - Nothing else – no analytics, no telemetry, no crash reporter.
 - **What's stored locally**
   - Harvest credentials in the login Keychain.
   - User preferences in `~/Library/Preferences/com.qampo.HarvestPlus.plist`.
@@ -315,7 +315,7 @@ the menu-bar icon → Settings).
 | **General** | App-wide preferences, Check for Updates, version/build info. |
 | **Integrations** | Harvest Account ID + Personal Access Token. Links to id.getharvest.com/developers and explicitly points to Personal Access Tokens (not OAuth2). |
 | **Schedule** | Working hours, per-weekday hour targets, lunch break window. Feeds the overtime calculator. |
-| **Notifications** | Banner preferences — idle reminders, meeting-log nudges. |
+| **Notifications** | Banner preferences – idle reminders, meeting-log nudges. |
 | **Export** | PDF export defaults (date range, destination folder). |
 | **Holidays** | Country/region for public holidays + manual PTO days. |
 
@@ -339,7 +339,7 @@ open HarvestPlus.xcodeproj
 The Xcode project uses **filesystem-synchronized root groups** (Xcode 16+),
 so new `.swift` files under `HarvestPlus/<SubfolderName>/` are picked up
 automatically without editing `project.pbxproj`. The `Scripts/` folder is
-explicitly excluded from the bundle via a `membershipExceptions` entry —
+explicitly excluded from the bundle via a `membershipExceptions` entry –
 if you add more release scripts there, they won't accidentally end up
 inside `HarvestPlus.app/Contents/Resources`.
 
@@ -347,6 +347,6 @@ inside `HarvestPlus.app/Contents/Resources`.
 
 ## Contact
 
-Maintainer: Razvan Politic — [@mrpolitic](https://github.com/mrpolitic)
+Maintainer: Razvan Politic – [@mrpolitic](https://github.com/mrpolitic)
 
 Bug reports and feature requests: open an issue on this repo.

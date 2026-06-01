@@ -8,7 +8,7 @@ check.
 
 Every build is **signed with a Developer ID Application certificate and
 notarized by Apple**, with the notarization ticket stapled to the `.app`.
-Gatekeeper accepts the app offline — no "is damaged" dialog, no
+Gatekeeper accepts the app offline – no "is damaged" dialog, no
 "unidentified developer" wall, no System Settings → Privacy & Security trip
 on install or launch. The `curl | bash` path is kept because it's a one-line
 install and matches what the in-app auto-updater does, not because it's
@@ -61,13 +61,13 @@ gh release create v<version> \
    ```
    The app-specific password lives in Apple's keychain; `build.sh` never
    sees it directly, it just references the profile name.
-5. **GitHub CLI** (`gh auth login`) — used by the release command.
+5. **GitHub CLI** (`gh auth login`) – used by the release command.
 
 `build.sh` will fail fast at preflight if any of #3 or #4 is missing.
 
 ---
 
-## Step 1 — Bump the version
+## Step 1 – Bump the version
 
 Open the project in Xcode → select the `HarvestPlus` target → **General** tab
 → update **Version** (the "marketing version", e.g. `1.1.0`) and **Build** (a
@@ -75,14 +75,14 @@ monotonic integer). Follow [semver](https://semver.org): bump major for
 breaking changes, minor for new features, patch for bug fixes.
 
 Update `CHANGELOG.md` with a human-readable summary. Move `[Unreleased]`
-content into a new dated `## [1.1.0] — YYYY-MM-DD` section. These notes
+content into a new dated `## [1.1.0] – YYYY-MM-DD` section. These notes
 appear on the GitHub release page and inside the in-app update prompt.
 
 Commit: `git commit -am "Bump version to 1.1.0"`.
 
 ---
 
-## Step 2 — Build, sign, notarize, staple
+## Step 2 – Build, sign, notarize, staple
 
 ```bash
 ./Scripts/build.sh --clean
@@ -90,26 +90,26 @@ Commit: `git commit -am "Bump version to 1.1.0"`.
 
 Pipeline:
 
-1. **Archive** — `xcodebuild archive` signed with the Developer ID
+1. **Archive** – `xcodebuild archive` signed with the Developer ID
    Application identity, hardened runtime enabled, the entitlements in
    `HarvestPlus/HarvestPlus.entitlements` baked in. Output:
    `build/HarvestPlus.xcarchive`.
-2. **Verify** — `codesign --verify --deep --strict` + a check that
+2. **Verify** – `codesign --verify --deep --strict` + a check that
    `flags=0x10000(runtime)` is set on the embedded binary. Notary would
    reject anything missing the hardened runtime; we fail fast.
-3. **Notarize** — `ditto -c -k --sequesterRsrc --keepParent` zips the
+3. **Notarize** – `ditto -c -k --sequesterRsrc --keepParent` zips the
    `.app`, then `xcrun notarytool submit … --wait` ships it to Apple's
    notary service and blocks until they reply. Typically 1–3 minutes. If
    rejected, `build.sh` fetches the detailed log via `notarytool log` and
    prints Apple's reason.
-4. **Staple** — `xcrun stapler staple` attaches the notarization ticket to
+4. **Staple** – `xcrun stapler staple` attaches the notarization ticket to
    the `.app` so Gatekeeper can validate it offline (no notary roundtrip
    on every coworker's launch).
-5. **Gatekeeper assess** — `spctl --assess --type execute` confirms the
+5. **Gatekeeper assess** – `spctl --assess --type execute` confirms the
    stapled bundle is accepted.
-6. **Final zip** — `ditto -c -k --sequesterRsrc --keepParent` produces the
+6. **Final zip** – `ditto -c -k --sequesterRsrc --keepParent` produces the
    two release assets:
-   - `build/HarvestPlus.app.zip` (fixed name — `install.sh` and the
+   - `build/HarvestPlus.app.zip` (fixed name – `install.sh` and the
      in-app updater fetch exactly this filename from
      `/releases/latest/download/`)
    - `build/HarvestPlus-<version>.app.zip` (versioned copy for humans
@@ -119,9 +119,9 @@ Output summary is printed at the end.
 
 ---
 
-## Step 3 — Tag and publish on GitHub
+## Step 3 – Tag and publish on GitHub
 
-Git tags are the source of truth for the in-app updater — the tag name must
+Git tags are the source of truth for the in-app updater – the tag name must
 match the marketing version (optionally prefixed with `v`).
 
 ```bash
@@ -138,7 +138,7 @@ gh release create v<version> \
 
 - The asset named **exactly** `HarvestPlus.app.zip` is what the installer
   curls from `/releases/latest/download/HarvestPlus.app.zip`. The versioned
-  copy is optional — upload it for humans browsing the Releases page.
+  copy is optional – upload it for humans browsing the Releases page.
 - The tag and the `MARKETING_VERSION` in the app must agree, or the in-app
   updater will either miss the update (their version > tag) or flag the
   user as outdated after a fresh install.
@@ -147,7 +147,7 @@ gh release create v<version> \
 
 ---
 
-## Step 4 — Verify the install on a clean Mac
+## Step 4 – Verify the install on a clean Mac
 
 On a second Mac (or a Mac that's never run HarvestPlus before), open
 Terminal and paste:
@@ -180,12 +180,12 @@ Automatic checks run **once per 24 h** on launch. The interval is
 
 ## Rolling back a bad release
 
-1. On GitHub, **mark the bad release as a draft** (don't delete — the tag
+1. On GitHub, **mark the bad release as a draft** (don't delete – the tag
    stays, but both the `/releases/latest` redirect and the updater skip
    drafts). `install.sh` will then fetch whichever release is now "latest".
 2. Users who already have the bad version keep working. Re-running the
    install command pulls the now-latest (previous) version and installs it
-   in place — effectively a downgrade.
+   in place – effectively a downgrade.
 3. Ship the fix as a new patch version. Don't reuse a version number.
 
 ---

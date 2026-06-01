@@ -3,7 +3,7 @@
 //  HarvestPlus
 //
 //  Posts an in-app feedback submission to Web3Forms, which forwards it to
-//  the maintainer's inbox. No backend of our own — Web3Forms hides the
+//  the maintainer's inbox. No backend of our own – Web3Forms hides the
 //  destination email behind a public access key.
 //
 //  Why Web3Forms vs. mailto: vs. GitHub Issues?

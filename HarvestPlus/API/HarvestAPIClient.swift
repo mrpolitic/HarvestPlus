@@ -4,9 +4,9 @@
 //
 //  Created by Razvan Politic on 14/04/2026.
 //
-//  The Harvest v2 REST client. Wraps the endpoints HarvestPlus needs —
+//  The Harvest v2 REST client. Wraps the endpoints HarvestPlus needs –
 //  running timer, time entries for a date range (paginated), project
-//  assignments, and stop/restart/create — behind bearer-token auth.
+//  assignments, and stop/restart/create – behind bearer-token auth.
 //
 
 import Foundation
@@ -56,7 +56,7 @@ final class HarvestAPIClient: Sendable {
                     URLQueryItem(name: "per_page", value: "2000")
                 ]
             )
-            // Stop if a page comes back empty even though total_pages claims more —
+            // Stop if a page comes back empty even though total_pages claims more –
             // guards against an infinite loop on a malformed pagination response.
             if response.timeEntries.isEmpty { break }
             allEntries.append(contentsOf: response.timeEntries)
@@ -173,7 +173,7 @@ final class HarvestAPIClient: Sendable {
         return allAssignments
     }
 
-    /// Get the current user's project assignments — the projects they can log time against,
+    /// Get the current user's project assignments – the projects they can log time against,
     /// with the tasks available on each. Single call, replaces separate projects+tasks fetching.
     func getMyProjectAssignments() async throws -> [ProjectAssignment] {
         var all: [ProjectAssignment] = []
@@ -251,7 +251,7 @@ final class HarvestAPIClient: Sendable {
             } catch {
                 // Offline / timeout / DNS throws a bare URLError. Wrap it as a
                 // typed network error so callers (poll / fetchInitialData) can
-                // flip to the .offline state — otherwise the URLError slips past
+                // flip to the .offline state – otherwise the URLError slips past
                 // their `as? HarvestAPIError` check and the app looks "connected"
                 // with stale data.
                 throw HarvestAPIError.networkError(error)

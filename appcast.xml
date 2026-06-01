@@ -17,7 +17,7 @@
   the raw entitlements file to `codesign`, which (unlike Xcode) doesn't expand
   `$(AppIdentifierPrefix)`. The shipped app ended up with a literal
   `$(AppIdentifierPrefix)com.qampo.HarvestPlus` keychain-access-group, which
-  macOS (AMFI) rejects at launch — so 1.1.0 wouldn't open on any machine other
+  macOS (AMFI) rejects at launch – so 1.1.0 wouldn't open on any machine other
   than the build machine (whose running copy was an older build). The build
   script now resolves the prefix before re-signing, and verifies the embedded
   entitlements are fully expanded so this can't ship again. No app-code change.

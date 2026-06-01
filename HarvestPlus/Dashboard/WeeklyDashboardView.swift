@@ -51,7 +51,7 @@ struct WeeklyDashboardView: View {
 
     /// When viewing the in-progress week, cap the prior week at the same
     /// weekday as today so totals compare like-for-like. If today is Tuesday,
-    /// compare Mon–Tue of this week vs Mon–Tue of last week — not Mon–Tue vs
+    /// compare Mon–Tue of this week vs Mon–Tue of last week – not Mon–Tue vs
     /// full Mon–Sun, which would always make "this week" look smaller.
     ///
     /// For historic weeks, `end` is the full Sunday.
@@ -100,7 +100,7 @@ struct WeeklyDashboardView: View {
             containing: previousWeekDates.monday,
             entries: previousEntries,
             settings: appState.settings
-            // Previous week is always historical — no polledAt needed.
+            // Previous week is always historical – no polledAt needed.
         )
     }
 
@@ -225,7 +225,7 @@ struct WeeklyDashboardView: View {
     // MARK: - Insights
 
     private var weeklyInsights: [DashboardInsight] {
-        // See `previousWeekDates` — when viewing the in-progress week, the
+        // See `previousWeekDates` – when viewing the in-progress week, the
         // prior week's data is truncated to the same weekday range.
         let label = isPartialPeriodComparison ? "last week so far" : "last week"
         return DashboardMetrics.generatePeriodInsights(
@@ -332,7 +332,7 @@ struct WeeklyDashboardView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .help("Average entries per working day — lower means more focused, higher means more context switches")
+                    .help("Average entries per working day – lower means more focused, higher means more context switches")
                 }
             }
 
@@ -347,7 +347,7 @@ struct WeeklyDashboardView: View {
         // the user immediately sees "I wasn't expected to register time
         // here." Even if hours were logged on that day (a Saturday push
         // or a holiday-task correction), the gray fill signals the
-        // schedule context — the tooltip still shows the actual hours.
+        // schedule context – the tooltip still shows the actual hours.
         if day.isNonWorkingDay {
             return Color(.separatorColor).opacity(0.3)
         }

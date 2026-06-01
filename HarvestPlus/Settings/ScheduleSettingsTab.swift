@@ -77,8 +77,8 @@ struct ScheduleSettingsTab: View {
         targetMon + targetTue + targetWed + targetThu + targetFri + targetSat + targetSun
     }
 
-    /// Round a target to the nearest 0.5h and clamp to 0...10 — the range the
-    /// picker offers — so the Picker's selection always matches an option tag.
+    /// Round a target to the nearest 0.5h and clamp to 0...10 – the range the
+    /// picker offers – so the Picker's selection always matches an option tag.
     /// Without this an off-grid stored value (hand-edited default, a future
     /// schedule import) would leave the picker rendering blank.
     private func snapTarget(_ value: Double) -> Double {

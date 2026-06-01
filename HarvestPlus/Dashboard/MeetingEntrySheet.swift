@@ -161,7 +161,7 @@ struct MeetingEntrySheet: View {
     // All fields share the same `Form { Section { ... } }.formStyle(.grouped)`
     // chrome used by `ScheduleSettingsTab` so the sheet matches the rest of
     // the app. Each row is a plain SwiftUI Form control (TextField / Picker /
-    // DatePicker) with its label supplied via the first argument — Form takes
+    // DatePicker) with its label supplied via the first argument – Form takes
     // care of label-on-left / control-on-right layout and field widths.
 
     private var entryForm: some View {
@@ -211,7 +211,7 @@ struct MeetingEntrySheet: View {
 
     private func projectDisplayName(_ assignment: ProjectAssignment) -> String {
         if let client = assignment.client {
-            return "\(client.name) — \(assignment.project.name)"
+            return "\(client.name) – \(assignment.project.name)"
         }
         return assignment.project.name
     }
@@ -326,7 +326,7 @@ struct MeetingEntrySheet: View {
             return
         }
         guard assignment.activeTasks.contains(where: { $0.id == saved.taskId }) else {
-            // Project still exists but saved task no longer does — prefill project only.
+            // Project still exists but saved task no longer does – prefill project only.
             selectedProjectId = saved.projectId
             didAutoFill = true
             return

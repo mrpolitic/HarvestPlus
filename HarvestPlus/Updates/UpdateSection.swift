@@ -3,7 +3,7 @@
 //  HarvestPlus
 //
 //  Settings row that shows the current version and a "Check for Updates"
-//  button. Sparkle owns the rest of the update UI — when the user clicks
+//  button. Sparkle owns the rest of the update UI – when the user clicks
 //  the button, Sparkle's standard updater driver presents the "Update
 //  Available" modal with release notes and progress.
 //

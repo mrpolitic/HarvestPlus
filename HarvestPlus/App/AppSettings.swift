@@ -42,7 +42,7 @@ struct AppSettings {
     var defaultExportFormat: ExportFormat = .pdf
     var pdfPaperSize: PaperSize = .a4
     /// When true (default), strips leading `[code]` prefixes (numeric or
-    /// alphanumeric) from project names before display — Harvest projects
+    /// alphanumeric) from project names before display – Harvest projects
     /// are often named `[000025] Project Name` for billing/admin purposes,
     /// and the code adds noise when you just want to read project names.
     /// Replaced the earlier free-form-regex setting, which was un-fillable

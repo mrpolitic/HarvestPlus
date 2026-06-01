@@ -136,7 +136,7 @@ struct ProjectCompositionBar: View {
                                         topTrailingRadius: isLast ? 6 : 0
                                     )
                                 )
-                                .help("\(project.name) — \(TimeFormat.clock(project.hours)) (\(Int((share * 100).rounded()))%)")
+                                .help("\(project.name) – \(TimeFormat.clock(project.hours)) (\(Int((share * 100).rounded()))%)")
                         }
                     }
                 }
@@ -290,7 +290,7 @@ struct ProjectTrendsCard: View {
     private func trendLabel(_ trend: ProjectTrend) -> String {
         switch trend.direction {
         case .new: return "new"
-        case .gone: return "—"
+        case .gone: return "–"
         case .steady: return "steady"
         case .up, .down:
             guard let p = trend.percentChange else { return "steady" }

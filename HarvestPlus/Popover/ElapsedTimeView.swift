@@ -11,7 +11,7 @@ import SwiftUI
 import Combine
 
 struct ElapsedTimeView: View {
-    /// `entry.hours` from the most recent Harvest poll — the live total
+    /// `entry.hours` from the most recent Harvest poll – the live total
     /// at poll time (Harvest returns it that way for running timers).
     let baseHours: Double
     /// Wall-clock time of that poll. We extrapolate elapsed *from this
@@ -49,7 +49,7 @@ struct ElapsedTimeView: View {
         var totalSeconds = Int(baseHours * 3600)
         if isRunning, let polled = polledAt {
             // Forward-extrapolate from the poll moment, not from
-            // `timer_started_at` — the time between `timer_started_at`
+            // `timer_started_at` – the time between `timer_started_at`
             // and `polled` is already included in `baseHours`.
             totalSeconds += Int(max(0, now.timeIntervalSince(polled)))
         }

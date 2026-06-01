@@ -3,7 +3,7 @@
 //  HarvestPlus
 //
 //  Shared time/duration formatting. These helpers used to be copy-pasted
-//  across the dashboard views — `formatHoursCompact` in five files,
+//  across the dashboard views – `formatHoursCompact` in five files,
 //  `formatHoursSigned` in three, `formatDays` in three, `formatDuration`
 //  in two. They're centralized here as `TimeFormat`.
 //
@@ -11,8 +11,8 @@
 //  hours in a few different styles ("H:MM" vs "Xh YYm", with/without a
 //  minute component), and collapsing them would silently change on-screen
 //  output. Each method preserves the exact behavior of the duplicates it
-//  replaced. (Single-use, view-specific formatters — e.g. the popover's
-//  "Xh YYm" elapsed style or a dashboard's weekday labels — deliberately
+//  replaced. (Single-use, view-specific formatters – e.g. the popover's
+//  "Xh YYm" elapsed style or a dashboard's weekday labels – deliberately
 //  stay private to their view, but they share `hoursAndMinutes` below for
 //  the decimal-hours → (h, m) math so rounding stays consistent.)
 //
@@ -27,7 +27,7 @@ enum TimeFormat {
     /// and truncating each component rendered e.g. 5.4833h as "5:28", because
     /// 0.4833 × 60 = 28.9999 floored to 28 instead of rounding to 29. The
     /// returned `minutes` is always 0...59; the value is treated as a
-    /// magnitude (sign is the caller's job — re-apply it after).
+    /// magnitude (sign is the caller's job – re-apply it after).
     static func hoursAndMinutes(_ hours: Double) -> (hours: Int, minutes: Int) {
         let totalMinutes = Int((Swift.abs(hours) * 60).rounded())
         return (totalMinutes / 60, totalMinutes % 60)

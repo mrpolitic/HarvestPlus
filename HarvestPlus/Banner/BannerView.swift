@@ -69,7 +69,7 @@ struct BannerView: View {
         .harvestFloatingShadow()
     }
 
-    /// The nudge is the only mode not reacting to a live event — it earns
+    /// The nudge is the only mode not reacting to a live event – it earns
     /// a calmer, centered, near-square layout.
     private var isCompactNudge: Bool {
         if case .nudge = mode { return true }
@@ -297,7 +297,7 @@ struct BannerView: View {
 
 // MARK: - Button Styles
 
-/// Filled pill — the primary, affirmative action in any mode.
+/// Filled pill – the primary, affirmative action in any mode.
 struct BannerPrimaryButtonStyle: ButtonStyle {
     var color: Color = AppColor.harvestOrange
 
@@ -309,7 +309,7 @@ struct BannerPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             // `.contentShape` before the fill guarantees the whole padded
-            // rect is hittable — without it, clicks in the gap between the
+            // rect is hittable – without it, clicks in the gap between the
             // Label's icon and text fell through.
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.sm))
             .background(
@@ -324,7 +324,7 @@ struct BannerPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Outlined pill — secondary actions like Stop / Switch task. Colored text
+/// Outlined pill – secondary actions like Stop / Switch task. Colored text
 /// and border, no fill, so it sits visibly lower in the hierarchy than primary.
 struct BannerSecondaryButtonStyle: ButtonStyle {
     var color: Color = AppColor.harvestOrange
@@ -351,7 +351,7 @@ struct BannerSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Footer controls (Snooze / Skip for today). Ghost text-link style — they're
+/// Footer controls (Snooze / Skip for today). Ghost text-link style – they're
 /// always available but never the thing the user came here to click.
 struct BannerFooterButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -376,7 +376,7 @@ struct BannerFooterButtonStyle: ButtonStyle {
                 .foregroundStyle(isHovered || isPressed ? .primary : .secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                // Hit the full padded area, not just the glyphs — the user
+                // Hit the full padded area, not just the glyphs – the user
                 // was getting dead clicks in the gap between icon and text.
                 .contentShape(RoundedRectangle(cornerRadius: 8))
                 .background(

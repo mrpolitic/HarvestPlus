@@ -386,7 +386,7 @@ extension ReportExporter {
 
     // MARK: - PDF Formatting Helpers
 
-    /// "H:MM (X.XXh)" — both formats side-by-side. Per feedback from
+    /// "H:MM (X.XXh)" – both formats side-by-side. Per feedback from
     /// Michael in Slack, the HH:mm format is more legible (matches Harvest's
     /// own UI), but the decimal is also kept so anyone doing arithmetic
     /// doesn't have to convert in their head. Used for entry rows and
@@ -399,7 +399,7 @@ extension ReportExporter {
     }
 
     /// Same as `formatDualHours` but emits a leading +/- for non-zero
-    /// values — used for Delta cells (overtime / undertime). Zero comes
+    /// values – used for Delta cells (overtime / undertime). Zero comes
     /// out unsigned as "0:00 (0.00h)" to keep the table tidy.
     private static func formatDualHoursSigned(_ hours: Double) -> String {
         if hours == 0 { return "0:00 (0.00h)" }
@@ -421,16 +421,16 @@ extension ReportExporter {
         case .daily(let date, _, _):
             let f = DateFormatter()
             f.dateStyle = .long
-            return "Daily Report — \(f.string(from: date))"
+            return "Daily Report: \(f.string(from: date))"
         case .weekly(let summary, _):
-            return "Weekly Report — Week \(summary.weekNumber), \(summary.year)"
+            return "Weekly Report: Week \(summary.weekNumber), \(summary.year)"
         case .monthly(let summary, _):
             let monthNames = ["January", "February", "March", "April", "May", "June",
                                "July", "August", "September", "October", "November", "December"]
             let name = summary.month >= 1 && summary.month <= 12 ? monthNames[summary.month - 1] : ""
-            return "Monthly Report — \(name) \(summary.year)"
+            return "Monthly Report: \(name) \(summary.year)"
         case .yearly(let year, _, _):
-            return "Yearly Report — \(year)"
+            return "Yearly Report: \(year)"
         }
     }
 

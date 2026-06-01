@@ -38,7 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleOAuthCallback(url: URL) {
-        // Parse OAuth callback — implemented in Session 4 (Outlook integration)
+        // Parse OAuth callback – implemented in Session 4 (Outlook integration)
         // Expected format: harvestplus://auth/microsoft?code=xxx&state=yyy
         NotificationCenter.default.post(
             name: .oauthCallback,

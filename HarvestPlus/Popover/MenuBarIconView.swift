@@ -25,12 +25,12 @@ struct MenuBarIconView: View {
 
     /// Two visual states:
     ///
-    ///   • Running — fully filled in harvestOrange. A glance at the menu bar
+    ///   • Running – fully filled in harvestOrange. A glance at the menu bar
     ///     tells you "a timer is on right now" without parsing a tiny dot.
-    ///   • Stopped / Offline — standard template icon. macOS tints it to match
+    ///   • Stopped / Offline – standard template icon. macOS tints it to match
     ///     the menu bar foreground, so it sits quietly like any system glyph.
     ///
-    /// The old "stopped during work hours" nudge dot is gone — that nudge
+    /// The old "stopped during work hours" nudge dot is gone – that nudge
     /// already lives in the banner, and a second indicator in the menu bar
     /// was redundant.
     private func compositeIcon() -> NSImage {
@@ -41,7 +41,7 @@ struct MenuBarIconView: View {
         // base image keeps this correct for whatever shape is in the
         // MenuBarIcon imageset. 2pt of breathing room around the glyph.
         // 15pt tall (not the full ~18pt menu-bar height) so the mark has a
-        // little breathing room — 18pt filled the bar edge-to-edge and read
+        // little breathing room – 18pt filled the bar edge-to-edge and read
         // as too large next to system glyphs. Centered in a 22pt canvas with
         // matching horizontal padding so the margin is even on all sides.
         let glyphHeight: CGFloat = 15
@@ -68,7 +68,7 @@ struct MenuBarIconView: View {
             return image
 
         case .stopped, .offline:
-            // Template — macOS handles the menu bar tint for us.
+            // Template – macOS handles the menu bar tint for us.
             let image = NSImage(size: canvasSize, flipped: false) { _ in
                 NSImage(named: "MenuBarIcon")?.draw(in: imageRect)
                 return true

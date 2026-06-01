@@ -74,7 +74,7 @@ struct DashboardView: View {
 
             Divider()
 
-            // Tab content — no bindings, children write to appState.pendingExportPeriod
+            // Tab content – no bindings, children write to appState.pendingExportPeriod
             switch selectedTab {
             case .daily:
                 DailyDashboardView()
@@ -120,7 +120,7 @@ struct DashboardView: View {
             contentType = .commaSeparatedText
         }
 
-        // Show save panel FIRST — no data generation yet, so UI responds instantly.
+        // Show save panel FIRST – no data generation yet, so UI responds instantly.
         // Must activate the app since menu bar apps can lose focus when the menu closes.
         NSApp.activate(ignoringOtherApps: true)
 
@@ -133,7 +133,7 @@ struct DashboardView: View {
         let response = panel.runModal()
         guard response == .OK, let url = panel.url else { return }
 
-        // User picked a location — now generate off the main thread so
+        // User picked a location – now generate off the main thread so
         // any PDF rendering time doesn't produce a spinning cursor.
         DispatchQueue.global(qos: .userInitiated).async {
             let fileData: Data?

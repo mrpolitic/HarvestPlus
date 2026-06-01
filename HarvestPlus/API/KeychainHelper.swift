@@ -4,7 +4,7 @@
 //
 //  Thin wrapper around Keychain Services. Uses the **data-protection
 //  keychain** (the same API as iOS) rather than macOS's legacy
-//  SecKeychain — that's the single change that makes credential reads
+//  SecKeychain – that's the single change that makes credential reads
 //  silent across Debug builds, Release builds, ad-hoc re-signs, and any
 //  future signature rotation.
 //
@@ -12,7 +12,7 @@
 //  ---------------------------------
 //  Legacy macOS keychain uses per-binary ACLs (SecAccessCreate +
 //  kSecAttrAccess). Every time the binary's code signature changes,
-//  macOS challenges the user with a password prompt — even with an
+//  macOS challenges the user with a password prompt – even with an
 //  "empty trusted-apps" SecAccess (which, contrary to lore, is not
 //  actually "allow all"; it's treated like nil in practice and falls
 //  back to "only the creator binary").
@@ -64,7 +64,7 @@ enum KeychainHelper {
         let updateStatus = SecItemUpdate(lookup as CFDictionary, updateAttribs as CFDictionary)
 
         if updateStatus == errSecItemNotFound {
-            // First time creating the item — add it with an accessibility
+            // First time creating the item – add it with an accessibility
             // class that survives reboot once the user logs in, and doesn't
             // sync to iCloud.
             var addQuery = lookup
