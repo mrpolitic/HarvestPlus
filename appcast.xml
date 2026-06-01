@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>HarvestPlus</title>
+        <link>https://github.com/mrpolitic/HarvestPlus</link>
+        <description>HarvestPlus update feed.</description>
+        <language>en</language>
+        <item>
+            <title>Version 1.1.0</title>
+            <pubDate>Mon, 01 Jun 2026 05:53:12 +0000</pubDate>
+            <description><![CDATA[
+
+### Added
+
+- **In-app feedback feature** under Settings → Feedback. Pick a category
+  (Bug / Feature / General), write a message, optionally attach a file
+  (≤ 5 MB), hit Send. Submissions go through [Web3Forms](https://web3forms.com)
+  to the maintainer's inbox — the maintainer's email is not exposed in
+  the app bundle. App version, macOS version, architecture, locale, and
+  time zone are auto-attached so reporters don't have to dig for them.
+- **`PRIVACY.md`** at the repo root, linked from the README and from the
+  Feedback tab. Plain-language explanation of what data the app touches,
+  where it lives, and what (very little) leaves your Mac.
+- **License change.** Switched from MIT to **[PolyForm Shield 1.0.0](https://polyformproject.org/licenses/shield/1.0.0/)**.
+  Any use is allowed (personal, internal at work, at any kind of company)
+  *except* offering a competing time-tracking product based on the
+  HarvestPlus source. Source-available, not strictly OSI-open-source, but
+  free for ~every actual user case. Linked from the README.
+- **"Skip for today" button on banners** — the nudge banner footer now
+  has both a Snooze (X min) and a Skip-for-today control. The skip lasts
+  until midnight local time and survives app quit/relaunch.
+- **PDF reports show both `H:MM` and decimal hours.** Per Slack feedback,
+  Harvest's web UI uses `7:30` style and that's easier to read than `7.5h`;
+  the decimal is kept alongside it so anyone doing arithmetic still has
+  the numeric form. Example: `7:30 (7.50h)`.
+- **Report Start Date** — Settings → Export → "Exclude entries before a
+  date". Useful if you tracked time wrong for a stretch: historical
+  entries stay in Harvest but are ignored in dashboards and PDFs, so
+  reports start clean from a chosen day. Toggle + DatePicker; off by default.
+- **Holiday breakdown in weekly/monthly/yearly dashboards.** Holiday-
+  task hours are surfaced as **days with decimals**, where 1 day = that
+  date's actual daily target (so 3.75h on a 7.5h-target day = 0.5 days).
+  Each holiday task type (configured via Settings → Holidays →
+  `holidayTaskNames`) gets its own tile — e.g., with the Danish default
+  setup you see separate "Holiday" and "Holiday (feriefridag)" cards
+  with their own day counts. Tiles hide themselves when zero. Replaces
+  the previous integer-count "Holiday days" stat that over-counted
+  half-days and lumped all types together.
+- **Public holidays and weekends are grayed out in dashboard charts.**
+  The weekly bar chart and the monthly/yearly heatmaps render any non-
+  working day in the neutral gray ramp — even if hours were logged —
+  so you can tell at a glance which days the schedule expected work
+  vs. didn't. Hours stay visible in the tooltip.
+
+### Fixed
+
+- **Running-timer total no longer shows ~2× the actual elapsed time**
+  (reported by Michael in Slack). Harvest's API returns `entry.hours` as
+  the **live total at poll time** for a running timer, not the saved-
+  hours-without-the-current-session. The previous code in five separate
+  display sites then added `(now - timer_started_at)` on top of `hours`,
+  double-counting the period between timer start and the most recent poll.
+  Now `TimeEntry.liveHours(now:polledAt:)` extrapolates from the poll
+  moment forward, so the running timer ticks at real speed everywhere
+  (popover, dashboards, end-of-day / end-of-week banner). End-of-week
+  totals self-correct as a result.
+- **Dashboards now stay in sync with the popover** for a running timer.
+  Each dashboard now extrapolates live elapsed from the **fetch time of
+  its own cached entries**, not the global `lastPolledAt` (which can be
+  tens of seconds newer than the cached data, causing under-counting).
+  New `AppState.fetchedAt(from:to:)` accessor.
+- **"Snooze (15 min)" banner button actually snoozes for 15 min now.**
+  Previously the banner reappeared roughly 30 s after clicking Snooze
+  because `isSnoozed` was reset to `false` whenever the timer state
+  re-emitted (e.g., on the next poll). And — separate latent bug —
+  after a few snooze clicks the banner sometimes stopped appearing
+  forever, because of stuck-Timer interactions. Both fixed by
+  refactoring `BannerManager` from boolean+Timer state to absolute
+  `snoozedUntil: Date?` / `skippedUntil: Date?` values persisted to
+  UserDefaults. Date-based muting can't drift out of sync or get stuck.
+- **Daily / period totals now match Harvest to the minute.** Decimal hours
+  were split into `H` and `M` with the minutes **truncated**, so a day
+  totalling ~5.4833h rendered as `5:28` (0.4833 × 60 = 28.9999, floored to
+  28) while Harvest showed `5:29`. Totals now round to the nearest minute
+  via a shared `TimeFormat.hoursAndMinutes(_:)` helper used by the popover,
+  dashboards, banners, and PDF reports. This also resolves a self-
+  inconsistency where the "Today" total and its "to go" delta didn't
+  reconcile against the daily target.
+- **Offline is now detected and surfaced.** A dropped connection used to
+  throw a raw `URLError` that slipped past the error handling, leaving the
+  app looking "connected" with stale numbers; it now flips to an Offline
+  state. An expired or revoked token (HTTP 401 *or* 403) now reliably
+  disconnects instead of being mistaken for a transient server error.
+- **Background polling no longer stalls while the popover is open.** The
+  poll, idle-check, and end-of-day/week timers now run in common run-loop
+  modes, so they keep firing during menu/modal tracking instead of pausing
+  exactly when you've opened the popover to check status.
+- **Pasted Account ID / API token are trimmed** before validating and
+  saving — a trailing newline or stray space (common on copy/paste) no
+  longer causes a mystifying "invalid credentials" failure, and the token
+  is written before the account id so a failed save can't leave a mismatched
+  pair in the keychain.
+- **Assorted hardening:** guards against duplicate Stop submissions, a stale
+  poll overwriting fresher data, unbounded pagination, negative timeline-bar
+  widths, off-grid schedule values blanking a picker, and an integer-overflow
+  edge in project-color selection.
+- **"Open Harvest" on the nudge banner now re-arms.** It used to launch Harvest,
+  hide the banner, and never come back unless the timer state happened to
+  transition — so a user who got distracted in Harvest and never started a
+  timer went silently un-tracked for the rest of the day. The nudge now
+  re-evaluates 3 minutes later; if a timer is started in the meantime the
+  `.running` transition cancels the pending nudge.
+
+### Changed
+
+- **Auto-updates are now silent.** Replaced the previous NSAppleScript +
+  Terminal install path with [Sparkle 2](https://sparkle-project.org/).
+  Updates are checked daily in the background, downloaded automatically,
+  and installed silently the next time you quit the app. No more
+  "HarvestPlus wants to control Terminal" consent dialog, no more
+  Terminal flash, no more banner-then-relaunch dance.
+- Releases are now signed with both the existing Developer ID Application
+  certificate (Gatekeeper) and a separate EdDSA key (Sparkle). The Sparkle
+  public key is bundled in `Info.plist`; the private key lives in the
+  maintainer's login keychain and never leaves the release machine.
+- `Scripts/build.sh` now signs each release zip with `sign_update` and
+  regenerates `appcast.xml` at the repo root after notarization. The
+  release process commits `appcast.xml` to `main` alongside the GitHub
+  release.
+
+### Fixed
+
+- **All keychain password prompts, including on Debug builds.** Migrated
+  `KeychainHelper` from the legacy macOS keychain (`SecKeychain` + per-
+  binary ACLs via `SecAccessCreate`) to the modern data-protection
+  keychain (the iOS-style Keychain Services API). The legacy keychain
+  prompted on every code-signature change because its ACLs are bound to
+  specific binaries — even the "allow all" trick we tried earlier turned
+  out to mean "only the creating binary" in practice. The data-protection
+  keychain uses team-prefixed access groups instead: every binary signed
+  with team `PA8H58YHD6` plus the `keychain-access-groups` entitlement
+  reads the same items, regardless of which build (Debug, Release, Apple
+  Development, Developer ID, ad-hoc) wrote them. Net effect: zero
+  prompts forever.
+- Resolves the `'SecAccessCreate' was deprecated in macOS 10.10` Xcode
+  warning.
+
+### Build infrastructure
+
+- `build.sh` now embeds a Developer ID Provisioning Profile in the .app
+  (`Contents/embedded.provisionprofile`). Required to use the data-
+  protection keychain. Profile name is set via the
+  `PROVISIONING_PROFILE_SPECIFIER` env var (default: "HarvestPlus
+  Developer ID").
+
+### Removed
+
+- `com.apple.security.automation.apple-events` entitlement (Sparkle doesn't
+  need it).
+- `NSAppleEventsUsageDescription` Info.plist key (no longer used).
+- `Scripts/install.sh`'s `osascript "tell ... to quit"` path (replaced
+  with direct `killall`, avoiding a "Terminal wants to control HarvestPlus"
+  consent dialog).
+- `Scripts/postinstall.sh` and `Scripts/ExportOptions.plist` (vestigial
+  from the abandoned .pkg distribution).
+
+### Migration note
+
+- Harvest credentials saved by 1.0.x live in the legacy keychain and
+  won't be visible to 1.1.0. The app will behave as "not yet connected"
+  on first launch — open Settings → Integrations and re-enter your
+  Harvest Account ID and Personal Access Token once. From then on,
+  launches are silent across all future builds.
+            ]]></description>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/mrpolitic/HarvestPlus/releases/download/v1.1.0/HarvestPlus.app.zip"
+                sparkle:version="1.1.0"
+                sparkle:shortVersionString="1.1.0"
+                length="3543038"
+                type="application/octet-stream"
+                sparkle:edSignature="KvEXlvcMQe9NZMSeU/m7d+w+5NmkoX65/QDMnany2kWo6OPPC+bwPEywTizB/jJBKeAQiOVo6XEGrGJhQkIuDg==" />
+        </item>
+    </channel>
+</rss>
