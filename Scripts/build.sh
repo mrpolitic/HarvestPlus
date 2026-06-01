@@ -208,12 +208,38 @@ if [ -d "$SPARKLE_FW" ]; then
 
     # Re-sign the outer .app — its embedded framework just changed, so the
     # original signature is no longer valid. Re-apply our entitlements.
+    #
+    # CRITICAL: codesign (unlike Xcode) does NOT expand build variables. The
+    # source .entitlements uses $(AppIdentifierPrefix) for the keychain-access
+    # group; passing it raw bakes in the LITERAL "$(AppIdentifierPrefix)…"
+    # string, which AMFI rejects at process spawn on every machine
+    # ("Launchd job spawn failed" / RBSRequestErrorDomain 5) — and it slips past
+    # codesign --verify, spctl, AND Apple notarization, so it only surfaces when
+    # a user actually launches the downloaded app. Resolve the prefix to the
+    # team id (== $(AppIdentifierPrefix) for this single-team Developer ID app)
+    # before signing.
+    RESIGN_ENTITLEMENTS="$BUILD_DIR/resign.entitlements"
+    sed "s#\$(AppIdentifierPrefix)#${DEVELOPMENT_TEAM}.#g" \
+        "$REPO_ROOT/HarvestPlus/HarvestPlus.entitlements" > "$RESIGN_ENTITLEMENTS"
     codesign --force --timestamp --options runtime \
-        --entitlements "$REPO_ROOT/HarvestPlus/HarvestPlus.entitlements" \
+        --entitlements "$RESIGN_ENTITLEMENTS" \
         --sign "$CODE_SIGN_IDENTITY" "$APP_EXPORTED" \
         >/dev/null 2>&1 || die "Failed to re-sign HarvestPlus.app after Sparkle re-sign"
     ok "Sparkle helpers + outer .app re-signed for notarization."
 fi
+
+# Guard: the embedded entitlements must carry a fully-resolved keychain-access
+# group. An unexpanded $(AppIdentifierPrefix) here is the difference between an
+# app that launches and one AMFI kills at spawn — and notarization won't catch
+# it. Fail the build loudly rather than ship an app nobody can open.
+EMBEDDED_ENT="$(codesign -d --entitlements :- "$APP_EXPORTED" 2>/dev/null)"
+if printf '%s' "$EMBEDDED_ENT" | grep -q 'AppIdentifierPrefix'; then
+    die "Embedded entitlements contain an unexpanded \$(AppIdentifierPrefix) — the app would fail to launch (AMFI). Aborting."
+fi
+if ! printf '%s' "$EMBEDDED_ENT" | grep -q "${DEVELOPMENT_TEAM}\.com\.qampo\.HarvestPlus"; then
+    die "Embedded keychain-access-group is missing the expected ${DEVELOPMENT_TEAM}. prefix. Aborting."
+fi
+ok "Entitlements verified (keychain-access-group prefix resolved)."
 
 if ! codesign --verify --deep --strict --verbose=1 "$APP_EXPORTED" >/dev/null 2>&1; then
     die "Built .app failed codesign verification."

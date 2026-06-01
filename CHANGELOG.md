@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-06-01
+
+### Fixed
+
+- **App failed to launch on other Macs ("Launchd job spawn failed").** The
+  release build re-signs the app after embedding Sparkle, and that step passed
+  the raw entitlements file to `codesign`, which (unlike Xcode) doesn't expand
+  `$(AppIdentifierPrefix)`. The shipped app ended up with a literal
+  `$(AppIdentifierPrefix)com.qampo.HarvestPlus` keychain-access-group, which
+  macOS (AMFI) rejects at launch — so 1.1.0 wouldn't open on any machine other
+  than the build machine (whose running copy was an older build). The build
+  script now resolves the prefix before re-signing, and verifies the embedded
+  entitlements are fully expanded so this can't ship again. No app-code change.
+
 ## [1.1.0] — 2026-05-22
 
 ### Added
