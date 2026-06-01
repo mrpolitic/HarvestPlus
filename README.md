@@ -113,30 +113,30 @@ Calendar section. Click **Grant Access** and approve the macOS prompt. This
 lets HarvestPlus show your calendar meetings alongside your time entries so
 you can spot unlogged meetings.
 
-> **Why Terminal and not a `.pkg`?** Two reasons. First, one Terminal
-> command is shorter than a download-then-double-click flow. Second, the
-> in-app auto-updater runs the same command in a Terminal window when a
-> new release is published, so coworkers only ever learn one install
-> workflow. The app is signed with a Developer ID Application certificate
-> and notarized by Apple, so it would also launch fine from a downloaded
-> `.app` – `curl | bash` is just less typing.
+> **Why Terminal and not a `.pkg`?** One Terminal command is shorter than a
+> download-then-double-click flow, and it's the same line in this README, in
+> the install script, and for everyone you share it with. The app is signed
+> with a Developer ID Application certificate and notarized by Apple, so it
+> also launches fine from a downloaded `.app`; `curl | bash` is just less
+> typing. Updates after the first install are fully automatic (Sparkle, no
+> Terminal); see "Keeping up to date" below.
 
 **System requirements**
 
-- macOS 14 (Sonoma) or later – tested on macOS 26 (Tahoe).
+- macOS 14.6 (Sonoma) or later. Tested on macOS 26 (Tahoe).
 - Apple Silicon or Intel.
 - A Harvest account with API access.
 
 **Keeping up to date**
 
-HarvestPlus checks for new releases automatically once per 24 hours and,
-when one is found, installs it silently in the background – Terminal
-flashes open, runs the install one-liner, and the app relaunches on the
-new version. No password, no clicks, nothing to dismiss.
+HarvestPlus updates itself with [Sparkle](https://sparkle-project.org). It
+checks for new releases once every 24 hours, downloads them in the background,
+and installs the update the next time you quit the app. No Terminal, no
+password, no clicks, nothing to dismiss.
 
-If you want to check manually, *Settings → General → About → Check for
-Updates* triggers the same flow. The **Install Update** button is also
-there as a manual fallback in case auto-install is ever blocked.
+To check manually, open *Settings → General → About → Check for Updates*. That
+brings up Sparkle's standard "Update available" prompt with the release notes
+and an Install button.
 
 ---
 
@@ -152,7 +152,8 @@ This section is for the nerds. Skip it if you just want to track time.
 - `EventKit` for Calendar
 - `Security` framework for Keychain (via a thin `KeychainHelper`)
 - `PDFKit` for report export
-- No third-party dependencies. No SPM packages. No Sparkle.
+- One Swift Package Manager dependency: [Sparkle](https://sparkle-project.org)
+  for auto-updates. Nothing else.
 
 ### Project layout
 
@@ -166,14 +167,14 @@ HarvestPlus/
   Popover/        # Menu-bar popover and the menu-bar icon itself
   Reporting/      # PDF export, overtime calculator
   Resources/      # Assets.xcassets (icons, colour tokens)
-  Settings/       # Six Settings tabs (General/Integrations/Schedule/...)
+  Settings/       # Seven Settings tabs (General/Schedule/Notifications/Integrations/Holidays/Export/Feedback)
   Timer/          # TimerMonitor (poll state) + IdleDetector
-  Updates/        # GitHub Releases update checker + Settings UI
+  Updates/        # Sparkle updater wrapper + Settings UI
   Info.plist
 
 Scripts/
-  build.sh   # archive → sign (Developer ID) → notarize → staple → zip
-  install.sh # curl | bash installer run by coworkers (and the in-app updater)
+  build.sh   # archive → Developer ID sign → notarize → staple → zip → sign appcast
+  install.sh # curl | bash installer for first install (and the manual-update path)
 ```
 
 ### App architecture
@@ -190,7 +191,7 @@ HarvestPlusApp (@main)
 │   └── PopoverView().environmentObject(appState)
 ├── Window "Dashboard"                        ← opened via command
 ├── Window "Log Meeting"                      ← opened from popover
-└── Settings → SettingsView (6 tabs)
+└── Settings → SettingsView (7 tabs)
 ```
 
 **`AppState`** is an `ObservableObject` that owns:
@@ -199,7 +200,7 @@ HarvestPlusApp (@main)
 - `todayEntries`, `todayMeetings`, `weekSummary`, `monthSummary`, `yearSummary`
 - `schedule: WorkSchedule` – weekday targets, lunch window, working hours
 - `settings: AppSettings` – user preferences persisted to UserDefaults
-- `updateChecker: UpdateChecker` – GitHub Releases poller
+- `updateChecker: UpdateChecker` – wraps Sparkle's updater
 
 Views observe `AppState` via `@EnvironmentObject`. Mutations flow back into
 `AppState` which in turn triggers the Harvest API client and updates the
@@ -244,20 +245,22 @@ constants rather than constructed per-frame.
 - The `NSCalendarsFullAccessUsageDescription` string is in `Info.plist`.
 
 **Keychain** (`API/KeychainHelper.swift`)
-- Generic-password items under service name `com.qampo.HarvestPlus`.
-- Two items: `harvest.account.id` (text) and `harvest.token` (text).
-- `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` – not synced to iCloud.
+- Uses the data-protection keychain (`kSecUseDataProtectionKeychain`) with the
+  access group `PA8H58YHD6.com.qampo.HarvestPlus`, so every signed build reads
+  the same items without a re-authorization prompt on each build switch.
+- Two items: the Harvest account ID and the personal access token.
+- `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`: not synced to iCloud.
 
-**GitHub Releases** (`Updates/UpdateChecker.swift`)
-- Polls `api.github.com/repos/mrpolitic/HarvestPlus/releases/latest` once
-  per 24h (and manually on demand).
-- Semver compares the tag (or `name`) against `CFBundleShortVersionString`,
-  handling prerelease tails (`1.2.0-beta.1 < 1.2.0`).
-- On finding a newer release, auto-installs ~2 s later: uses `NSAppleScript`
-  to tell Terminal to run the install one-liner. The shell quits this
-  process, swaps the bundle, and relaunches the new version. We don't do
-  the swap from inside the app because sandboxed apps can't replace their
-  own bundle on disk while running.
+**Updates** (`Updates/UpdateChecker.swift`)
+- A thin wrapper around Sparkle 2's `SPUStandardUpdaterController`.
+- Polls the appcast at
+  `raw.githubusercontent.com/mrpolitic/HarvestPlus/main/appcast.xml` once per
+  24h (and manually on demand).
+- Each release zip is signed with an EdDSA key on the release machine; Sparkle
+  verifies the signature against the public key in `Info.plist` before
+  installing anything. The bundle swap runs in Sparkle's out-of-process XPC
+  installer, which is what lets a sandboxed app update itself with no Terminal
+  and no Apple Events.
 
 ### Security & privacy
 
@@ -271,16 +274,21 @@ constants rather than constructed per-frame.
   so Gatekeeper can validate it offline – no "is damaged" / "unidentified
   developer" dialogs, no System Settings trip.
 - **Entitlements** (`HarvestPlus.entitlements`):
-  - `com.apple.security.network.client` – Harvest API + update checks.
-  - `com.apple.security.personal-information.calendars` – EventKit.
-  - `com.apple.security.files.user-selected.read-write` – PDF export destination.
-  - `com.apple.security.automation.apple-events` – tells Terminal to run the
-    installer when you click *Install Update* (one-time consent dialog).
+  - `com.apple.security.network.client`: Harvest API + Sparkle update checks.
+  - `com.apple.security.personal-information.calendars`: EventKit.
+  - `com.apple.security.files.user-selected.read-write`: PDF export destination.
+  - `keychain-access-groups`: shared credential access across signed builds.
+  - `com.apple.security.temporary-exception.mach-lookup.global-name`
+    (`org.sparkle-project.InstallerLauncher`): lets the sandboxed app reach
+    Sparkle's out-of-process installer.
 - **What leaves your Mac**
   - HTTPS calls to `api.harvestapp.com` (authenticated with your token).
-  - HTTPS calls to `api.github.com` and `objects.githubusercontent.com`
-    (unauthenticated, for update checks).
-  - Nothing else – no analytics, no telemetry, no crash reporter.
+  - HTTPS calls to `raw.githubusercontent.com` (the Sparkle appcast) and
+    `github.com` / `objects.githubusercontent.com` (release downloads),
+    unauthenticated, for updates.
+  - A feedback submission, only if you send one from Settings → Feedback, via
+    [Web3Forms](https://web3forms.com).
+  - Nothing else. No analytics, no telemetry, no crash reporter.
 - **What's stored locally**
   - Harvest credentials in the login Keychain.
   - User preferences in `~/Library/Preferences/com.qampo.HarvestPlus.plist`.
@@ -292,7 +300,7 @@ For the full release procedure, see [`RELEASING.md`](./RELEASING.md). The
 short version:
 
 ```bash
-./Scripts/build.sh --clean       # archive → sign → notarize → staple → zip
+./Scripts/build.sh --clean       # archive → sign → notarize → staple → zip → sign appcast
 gh release create v<v> \
     build/HarvestPlus.app.zip build/HarvestPlus-<v>.app.zip \
     --title "HarvestPlus <v>" --notes-file CHANGELOG.md
@@ -315,9 +323,10 @@ the menu-bar icon → Settings).
 | **General** | App-wide preferences, Check for Updates, version/build info. |
 | **Integrations** | Harvest Account ID + Personal Access Token. Links to id.getharvest.com/developers and explicitly points to Personal Access Tokens (not OAuth2). |
 | **Schedule** | Working hours, per-weekday hour targets, lunch break window. Feeds the overtime calculator. |
-| **Notifications** | Banner preferences – idle reminders, meeting-log nudges. |
-| **Export** | PDF export defaults (date range, destination folder). |
+| **Notifications** | Banner preferences: idle reminders, meeting-log nudges, end-of-day and end-of-week summaries. |
+| **Export** | Default format (PDF or CSV), paper size, project-name cleanup, and the report start-date cutoff. |
 | **Holidays** | Country/region for public holidays + manual PTO days. |
+| **Feedback** | In-app form for bug reports, ideas, and general feedback, sent to the maintainer. |
 
 ---
 
