@@ -264,21 +264,20 @@ struct PopoverView: View {
                         height: 10
                     )
 
-                // Overtime spillover
+                // Overtime: a red cap on the right end, kept inside the track bounds.
                 if appState.todayTotalHours > appState.todayTarget && appState.todayTarget > 0 {
                     let overtimeRatio = min(
                         (appState.todayTotalHours - appState.todayTarget) / appState.todayTarget,
                         0.5
                     )
-                    RoundedRectangle(cornerRadius: 5)
+                    let overtimeWidth = max(0, geometry.size.width * overtimeRatio)
+                    Rectangle()
                         .fill(AppColor.harvestRed.opacity(0.5))
-                        .frame(
-                            width: max(0, geometry.size.width * overtimeRatio),
-                            height: 10
-                        )
-                        .offset(x: geometry.size.width)
+                        .frame(width: overtimeWidth, height: 10)
+                        .offset(x: geometry.size.width - overtimeWidth)
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
         }
         .frame(height: 10)
     }
