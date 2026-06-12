@@ -6,30 +6,27 @@
         <description>HarvestPlus update feed.</description>
         <language>en</language>
         <item>
-            <title>Version 1.1.1</title>
-            <pubDate>Mon, 01 Jun 2026 06:23:13 +0000</pubDate>
+            <title>Version 1.1.2</title>
+            <pubDate>Fri, 12 Jun 2026 10:28:18 +0000</pubDate>
             <description><![CDATA[
 
 ### Fixed
 
-- **App failed to launch on other Macs ("Launchd job spawn failed").** The
-  release build re-signs the app after embedding Sparkle, and that step passed
-  the raw entitlements file to `codesign`, which (unlike Xcode) doesn't expand
-  `$(AppIdentifierPrefix)`. The shipped app ended up with a literal
-  `$(AppIdentifierPrefix)com.qampo.HarvestPlus` keychain-access-group, which
-  macOS (AMFI) rejects at launch – so 1.1.0 wouldn't open on any machine other
-  than the build machine (whose running copy was an older build). The build
-  script now resolves the prefix before re-signing, and verifies the embedded
-  entitlements are fully expanded so this can't ship again. No app-code change.
+- **Overtime indicator overflowed the progress bar.** When you logged past
+  your daily target, the overtime marker extended past the end of the bar. It
+  now stays within the bar, shown as a red cap on the right end.
+- **Newly added Harvest projects were missing from the meeting entry picker.**
+  The project list now refreshes each time you log a meeting, so projects added
+  in Harvest show up right away instead of only after an app restart.
             ]]></description>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <enclosure
-                url="https://github.com/mrpolitic/HarvestPlus/releases/download/v1.1.1/HarvestPlus.app.zip"
-                sparkle:version="1.1.1"
-                sparkle:shortVersionString="1.1.1"
-                length="3543074"
+                url="https://github.com/mrpolitic/HarvestPlus/releases/download/v1.1.2/HarvestPlus.app.zip"
+                sparkle:version="1.1.2"
+                sparkle:shortVersionString="1.1.2"
+                length="3543746"
                 type="application/octet-stream"
-                sparkle:edSignature="+Mt3AETNu+SYUIyA/t11tYqm2iRcZ68ZVkfFtHx9YA9yXwzBU+yVZOV8EkMo1mDJj9LZ7ofD/jMI+wU5KVaoBw==" />
+                sparkle:edSignature="mdXdZwvUb8u9BNUicwWwnbeaVWzTSfxhHXljO9+Dp7yBJ4yxQbIF0Zxvp/6AQhMx88/grL8mavOs/2yn/30CCQ==" />
         </item>
     </channel>
 </rss>
