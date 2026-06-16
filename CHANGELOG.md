@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] – 2026-06-16
+
+### Fixed
+
+- **Automatic updates could not install.** The app is sandboxed, and Sparkle
+  needs two extra entitlements to hand a downloaded update to its installer.
+  Without them, updates downloaded but failed with "an error occurred while
+  running the updater." Added the required entitlements so updates install
+  cleanly. Because earlier builds were missing them, this version must be
+  installed manually once; after that, updates apply automatically again.
+
 ## [1.1.2] – 2026-06-07
 
 ### Fixed
