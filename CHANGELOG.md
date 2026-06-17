@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] – 2026-06-16
+
+### Fixed
+
+- **Frequent "couldn't load projects" errors.** The meeting entry sheet was
+  re-fetching your Harvest projects every time it opened, so a slow or flaky
+  connection popped an error often. Projects are now cached and refreshed at
+  most once an hour, and a failed refresh quietly keeps the existing list.
+
 ## [1.1.3] – 2026-06-16
 
 ### Fixed
