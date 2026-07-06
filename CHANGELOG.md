@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.5] – 2026-07-06
+
+### Fixed
+
+- **End-of-day and end-of-week summary banners showed "Snooze" and "Skip for
+  today" buttons.** Those made no sense on a one-time report, so they now show
+  a single "Close" button instead.
+
 ## [1.1.4] – 2026-06-16
 
 ### Fixed

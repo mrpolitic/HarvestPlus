@@ -6,29 +6,28 @@
         <description>HarvestPlus update feed.</description>
         <language>en</language>
         <item>
-            <title>Version 1.1.4</title>
+            <title>Version 1.1.5</title>
             <link>https://github.com/mrpolitic/HarvestPlus/releases/latest</link>
-            <pubDate>Wed, 17 Jun 2026 14:37:01 +0000</pubDate>
+            <pubDate>Mon, 06 Jul 2026 08:07:30 +0000</pubDate>
             <description><![CDATA[
 
 ### Fixed
 
-- **Frequent "couldn't load projects" errors.** The meeting entry sheet was
-  re-fetching your Harvest projects every time it opened, so a slow or flaky
-  connection popped an error often. Projects are now cached and refreshed at
-  most once an hour, and a failed refresh quietly keeps the existing list.
+- **End-of-day and end-of-week summary banners showed "Snooze" and "Skip for
+  today" buttons.** Those made no sense on a one-time report, so they now show
+  a single "Close" button instead.
             ]]></description>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:informationalUpdate>
                 <sparkle:belowVersion>4</sparkle:belowVersion>
             </sparkle:informationalUpdate>
             <enclosure
-                url="https://github.com/mrpolitic/HarvestPlus/releases/download/v1.1.4/HarvestPlus.app.zip"
-                sparkle:version="5"
-                sparkle:shortVersionString="1.1.4"
-                length="3545140"
+                url="https://github.com/mrpolitic/HarvestPlus/releases/download/v1.1.5/HarvestPlus.app.zip"
+                sparkle:version="6"
+                sparkle:shortVersionString="1.1.5"
+                length="3546754"
                 type="application/octet-stream"
-                sparkle:edSignature="9o8Lf3GzGmNfF3hhx63USBgLYnR7jX2e1mYQSAeLkfTn/GVrrX7g5brPMQDA4OtQsq2JklVboSXXG7UDZSWjBg==" />
+                sparkle:edSignature="bIMhi3QsBXyPYNdVhXNQ47gnGfX7gDQ71Nyu+wTDZV3tD8JeUrHHXYXj2h6VM1gDSCIL0JiJa4rj6qaM/hwKAg==" />
         </item>
     </channel>
 </rss>
